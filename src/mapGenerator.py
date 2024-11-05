@@ -92,5 +92,6 @@ def handle_args(argv_list):
             command += str(key) + ' ' + str(value) + ' '
         command += '-o ' + base_filename + str(i) + '.net.xml'
         os.system(command)
+        
 if __name__ == "__main__":
     handle_args(argv[1:])
