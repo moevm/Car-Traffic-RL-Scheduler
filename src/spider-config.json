@@ -1,0 +1,20 @@
+{
+    "-s": "true",
+    "--number-networks": 50,
+    "--spider.arm-number": {
+        "low": 3,
+        "high": 11
+    },
+    "--spider.circle-number": {
+        "low": 50,
+        "high": 150
+    },
+    "--spider.space-radius": {
+        "low": 50.0,
+        "high": 150.0
+    },
+    "--spider.omit-center": {
+        "low": "false",
+        "high": "true"
+    }
+}
