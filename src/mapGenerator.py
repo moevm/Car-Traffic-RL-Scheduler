@@ -26,7 +26,6 @@ def get_netgenerate_cli(cli: dict) -> dict:
             elif type(cli[key]["low"]) == float:
                 netgenerate_cli[key] = random.uniform(cli[key]["low"], cli[key]["high"])
             else:
-                print(cli[key]["low"], cli[key]["high"])
                 netgenerate_cli[key] = random.randint(cli[key]["low"], cli[key]["high"])
     return netgenerate_cli
 
@@ -43,10 +42,8 @@ def init_cli(argv_list: list) -> dict:
     for net_type in cli_dict.keys():
         for arg in argv_list:
             if net_type == arg:
-                print(net_type, arg)
                 base_cli = cli_dict[net_type]
                 break
-    print(base_cli)
     return base_cli
 
 def substitute_args(base_cli: dict, cli: dict, argv_list: list) -> None:
@@ -120,9 +117,8 @@ def handle_args(argv_list: list) -> None:
             assign_spider_attach_params(base_cli, netgenerate_cli)
         command = "netgenerate "
         for key, value in netgenerate_cli.items():
-            command += str(key) + " " + str(value) + " "
-        command += "-o " + base_filename + str(i) + ".net.xml"
-        print(command)
+            command += f"{str(key)} {str(value)} "
+        command += f"-o {base_filename + str(i)}.net.xml"
         os.system(command)
 
 
