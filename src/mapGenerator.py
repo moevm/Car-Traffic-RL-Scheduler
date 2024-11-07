@@ -124,11 +124,7 @@ def handle_args(argv_list: list) -> None:
         command += "-o " + base_filename + str(i) + ".net.xml"
         print(command)
         os.system(command)
-<<<<<<< HEAD
-        
-=======
 
 
->>>>>>> cbf6f77 (fix mass generation of maps)
 if __name__ == "__main__":
     handle_args(argv[1:])
