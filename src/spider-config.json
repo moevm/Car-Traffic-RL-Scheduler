@@ -6,8 +6,8 @@
         "high": 11
     },
     "--spider.circle-number": {
-        "low": 50,
-        "high": 150
+        "low": 3,
+        "high": 7
     },
     "--spider.space-radius": {
         "low": 50.0,

@@ -2,55 +2,54 @@ import sys, random, os, json
 from sys import argv
 
 
-def get_grid_cli():
-    with open('grid-config.json', 'r') as file:
-        cli = json.load(file)
-    return cli
+def get_grid_cli() -> dict:
+    with open("grid-config.json", "r") as file:
+        base_cli = json.load(file)
+    return base_cli
 
-def get_spider_cli():
-    with open('spider-config.json', 'r') as file:
-        cli = json.load(file)
-    return cli
+def get_spider_cli() -> dict:
+    with open("spider-config.json", "r") as file:
+        base_cli = json.load(file)
+    return base_cli
 
-def get_random_cli():
-    with open('rand-config.json', 'r') as file:
-        cli = json.load(file)
-    return cli
+def get_random_cli() -> dict:
+    with open("rand-config.json", "r") as file:
+        base_cli = json.load(file)
+    return base_cli
 
-def get_netgenerate_cli(cli):
-    cli.pop("--number-networks")
-    net_types = ["-g", "-s", "-r"]
-    for net_type in net_types:
-        if net_type in cli.keys():
-            cli.pop(net_type)
-            break
+def get_netgenerate_cli(cli: dict) -> dict:
     netgenerate_cli = {}
     for key, value in cli.items():
-        if type(cli[key]["low"]) == str:
-            netgenerate_cli[key] = random.choice(list(cli[key].values()))
-        elif type(cli[key]["low"]) == float:
-            netgenerate_cli[key] = random.uniform(cli[key]["low"], cli[key]["high"])
-        else:
-            netgenerate_cli[key] = random.randint(cli[key]["low"], cli[key]["high"])
+        if type(cli[key]) == dict:
+            if type(cli[key]["low"]) == str:
+                netgenerate_cli[key] = random.choice(list(cli[key].values()))
+            elif type(cli[key]["low"]) == float:
+                netgenerate_cli[key] = random.uniform(cli[key]["low"], cli[key]["high"])
+            else:
+                print(cli[key]["low"], cli[key]["high"])
+                netgenerate_cli[key] = random.randint(cli[key]["low"], cli[key]["high"])
     return netgenerate_cli
 
-def init_cli(argv_list):
-    cli = {}
-    grid_names = ["-g", "--grid"]
-    spider_names = ["-s", "--spider"]
-    random_names = ["-r", "--rand"]
-    for grid_name in grid_names:
-        if grid_name in argv_list:
-            cli = get_grid_cli()
-    for spider_name in spider_names:
-        if spider_name in argv_list:
-            cli = get_spider_cli()
-    for random_name in random_names:
-        if random_name in argv_list:
-            cli = get_random_cli()
-    return cli
 
-def substitute_args(cli, argv_list):
+def init_cli(argv_list: list) -> dict:
+    cli_dict = {
+        "-g": get_grid_cli(),
+        "--grid": get_grid_cli(),
+        "-s": get_spider_cli(),
+        "--spider": get_spider_cli(),
+        "-r": get_grid_cli(),
+        "--rand": get_random_cli()
+    }
+    for net_type in cli_dict.keys():
+        for arg in argv_list:
+            if net_type == arg:
+                print(net_type, arg)
+                base_cli = cli_dict[net_type]
+                break
+    print(base_cli)
+    return base_cli
+
+def substitute_args(base_cli: dict, cli: dict, argv_list: list) -> None:
     for i in range(len(argv_list)):
         if argv_list[i] == "--number-networks":
             cli["--number-networks"] = int(argv_list[i + 1])
@@ -58,25 +57,53 @@ def substitute_args(cli, argv_list):
         elif argv_list[i] in ["-g", "--grid", "-s", "--spider", "-r", "--rand"]:
             continue
         elif "-" in argv_list[i]:
-            pos = argv_list[i].rfind('-')
-            key = argv_list[i][:pos]
-            value = argv_list[i][pos+1:]
-            if value not in ["low", "high"]:
+            pos = argv_list[i].rfind("-")
+            main_key = argv_list[i][:pos]
+            sub_key = argv_list[i][pos+1:]
+            if sub_key not in ["low", "high"]:
                 print("Error: invalid arg value.")
                 sys.exit()
+            cli[main_key] = base_cli[main_key]
             try:
-                cli[key][value] = int(argv_list[i + 1])
+                base_cli_type = type(base_cli[main_key]["low"])
+                cli[main_key][sub_key] = base_cli_type(argv_list[i + 1])
             except IndexError:
                 print("Error: invalid args sequence.")
                 sys.exit()
             except ValueError:
                 print("Error: invalid arg value.")
                 sys.exit()
+    return
 
-def handle_args(argv_list):
-    cli = init_cli(argv_list)
-    substitute_args(cli, argv_list)
-    number_networks = cli["--number-networks"]
+def assign_grid_attach_params(base_cli: dict, netgenerate_cli: dict) -> None:
+    grid_params_dict = {}
+    grid_params = ["--grid.x-length", "--grid.y-length", "--grid.length"]
+    for param in grid_params:
+        grid_params_dict[param] = (base_cli[param]["low"] + base_cli[param]["high"]) / 2
+    for param in grid_params:
+        if param in netgenerate_cli.keys():
+            grid_params_dict[param] = netgenerate_cli[param]
+    for param in grid_params_dict.keys():
+        pos = param.rfind('l')
+        netgenerate_cli[param[:pos] + "attach-length"] = grid_params_dict[param]
+    return
+
+def assign_spider_attach_params(base_cli: dict, netgenerate_cli: dict) -> None:
+    spider_attach_dict = {}
+    spider_params = ["--spider.space-radius", "--spider.circle-number"]
+    for param in spider_params:
+        spider_attach_dict[param] = (base_cli[param]["low"] + base_cli[param]["high"]) / 2
+    for param in spider_params:
+        if param in netgenerate_cli.keys():
+            spider_attach_dict[param] = netgenerate_cli[param]
+    netgenerate_cli["--spider.attach-length"] = (spider_attach_dict[spider_params[0]] /
+                                                 spider_attach_dict[spider_params[1]]) # ???
+    return
+
+def handle_args(argv_list: list) -> None:
+    base_cli = init_cli(argv_list)
+    cli = {list(base_cli.items())[0][0]: "true"}
+    substitute_args(base_cli, cli, argv_list)
     match list(cli.items())[0][0]:
         case "-g":
             base_filename = "grid"
@@ -84,14 +111,24 @@ def handle_args(argv_list):
             base_filename = "spider"
         case "-r":
             base_filename = "rand"
-    for i in range(number_networks):
+    for i in range(cli["--number-networks"]):
         netgenerate_cli = get_netgenerate_cli(cli.copy())
         netgenerate_cli[list(cli.items())[0][0]] = "true"
-        command = 'netgenerate '
+        if base_filename == "grid":
+            assign_grid_attach_params(base_cli, netgenerate_cli)
+        elif base_filename == "spider":
+            assign_spider_attach_params(base_cli, netgenerate_cli)
+        command = "netgenerate "
         for key, value in netgenerate_cli.items():
-            command += str(key) + ' ' + str(value) + ' '
-        command += '-o ' + base_filename + str(i) + '.net.xml'
+            command += str(key) + " " + str(value) + " "
+        command += "-o " + base_filename + str(i) + ".net.xml"
+        print(command)
         os.system(command)
+<<<<<<< HEAD
         
+=======
+
+
+>>>>>>> cbf6f77 (fix mass generation of maps)
 if __name__ == "__main__":
     handle_args(argv[1:])
