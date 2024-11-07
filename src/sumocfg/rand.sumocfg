@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- generated on 2024-11-07 16:48:59 by Eclipse SUMO sumo Version 1.21.0
+-->
+
+<sumoConfiguration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/sumoConfiguration.xsd">
+
+    <input>
+        <net-file value="../generated-nets/rand-nets/rand0.net.xml"/>
+        <route-files value="rand.rou.xml"/>
+        <additional-files value="rand.add.xml"/>
+    </input>
+
+</sumoConfiguration>

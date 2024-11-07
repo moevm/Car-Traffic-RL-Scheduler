@@ -3,17 +3,17 @@ from sys import argv
 
 
 def get_grid_cli() -> dict:
-    with open("grid-config.json", "r") as file:
+    with open("base-cli-params/grid-config.json", "r") as file:
         base_cli = json.load(file)
     return base_cli
 
 def get_spider_cli() -> dict:
-    with open("spider-config.json", "r") as file:
+    with open("base-cli-params/spider-config.json", "r") as file:
         base_cli = json.load(file)
     return base_cli
 
 def get_random_cli() -> dict:
-    with open("rand-config.json", "r") as file:
+    with open("base-cli-params/rand-config.json", "r") as file:
         base_cli = json.load(file)
     return base_cli
 
@@ -36,7 +36,7 @@ def init_cli(argv_list: list) -> dict:
         "--grid": get_grid_cli(),
         "-s": get_spider_cli(),
         "--spider": get_spider_cli(),
-        "-r": get_grid_cli(),
+        "-r": get_random_cli(),
         "--rand": get_random_cli()
     }
     for net_type in cli_dict.keys():
@@ -94,7 +94,7 @@ def assign_spider_attach_params(base_cli: dict, netgenerate_cli: dict) -> None:
         if param in netgenerate_cli.keys():
             spider_attach_dict[param] = netgenerate_cli[param]
     netgenerate_cli["--spider.attach-length"] = (spider_attach_dict[spider_params[0]] /
-                                                 spider_attach_dict[spider_params[1]]) # ???
+                                                 spider_attach_dict[spider_params[1]]) + 200# ???
     return
 
 def handle_args(argv_list: list) -> None:
@@ -118,7 +118,8 @@ def handle_args(argv_list: list) -> None:
         command = "netgenerate "
         for key, value in netgenerate_cli.items():
             command += f"{str(key)} {str(value)} "
-        command += f"-o {base_filename + str(i)}.net.xml"
+        command += f"-o generated-nets/{base_filename}-nets/{base_filename + str(i)}.net.xml"
+        print(command)
         os.system(command)
 
 
