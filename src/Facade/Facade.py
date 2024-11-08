@@ -11,16 +11,24 @@ class Facade:
         traci.simulationStep()
         self.net = Net()
         self.__routes = RouteGeneration(self.net)
-        self.__target_nodes_data = []
+        self.__transport = TransportGeneration()
+        self.__last_target_nodes_data = []
 
     def __generate_transport(self):
-        pass
+        self.__transport.generate(self.__last_target_nodes_data)
 
     def __generate_routes(self):
         self.__routes.uniform_distribution_for_target_edges()
-        self.__target_nodes_data = self.__routes.get_target_nodes_data()
+        self.__last_target_nodes_data = self.__routes.get_last_target_nodes_data()
 
     def execute(self):
         self.__generate_routes()
         self.__generate_transport()
+        step = 0
+        while traci.simulation.getMinExpectedNumber() > 0:
+            traci.simulationStep()
+            if step % 10 == 0:
+                self.__generate_routes()
+                self.__generate_transport()
+            step += 1
         traci.close()

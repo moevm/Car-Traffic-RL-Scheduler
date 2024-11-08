@@ -7,6 +7,7 @@ import random
 class RouteGeneration:
     def __init__(self, net):
         self.__route_counter = 0
+        self.__last_n_routes = 0
         self.net = net
         self.__extreme_nodes = self.net.get_extreme_nodes()
         self.__target_nodes = self.net.get_clear_nodes()
@@ -41,6 +42,12 @@ class RouteGeneration:
             self.__target_nodes_data[i].paths.append(path)
             self.__target_nodes_data[i].path_length_meters.append(path_length_in_meters)
             self.__target_nodes_data[i].path_length_edges.append(path_length_in_edges)
-            self
+            self.__target_nodes_data[i].routes_ids.append(self.__route_counter)
+            self.__route_counter += 1
+        self.__last_n_routes = n_routes
+
+    def get_last_target_nodes_data(self):
+        return self.__target_nodes_data[:self.__last_n_routes]
+
     def get_target_nodes_data(self):
         return self.__target_nodes_data
