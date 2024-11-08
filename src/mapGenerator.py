@@ -86,15 +86,12 @@ def assign_grid_attach_params(base_cli: dict, netgenerate_cli: dict) -> None:
     return
 
 def assign_spider_attach_params(base_cli: dict, netgenerate_cli: dict) -> None:
-    spider_attach_dict = {}
-    spider_params = ["--spider.space-radius", "--spider.circle-number"]
-    for param in spider_params:
-        spider_attach_dict[param] = (base_cli[param]["low"] + base_cli[param]["high"]) / 2
-    for param in spider_params:
-        if param in netgenerate_cli.keys():
-            spider_attach_dict[param] = netgenerate_cli[param]
-    netgenerate_cli["--spider.attach-length"] = (spider_attach_dict[spider_params[0]] /
-                                                 spider_attach_dict[spider_params[1]]) + 200# ???
+    param = "--spider.space-radius"
+    spider_attach_dict = {param: (base_cli[param]["low"] +
+                                                    base_cli[param]["high"]) / 2}
+    if param in netgenerate_cli.keys():
+        spider_attach_dict[param] = netgenerate_cli[param]
+    netgenerate_cli["--spider.attach-length"] = spider_attach_dict[param]
     return
 
 def handle_args(argv_list: list) -> None:

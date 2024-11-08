@@ -1,4 +1,4 @@
-import traci, heapq
+import traci, heapq, random
 
 class Net:
     def __init__(self):
@@ -62,7 +62,9 @@ class Net:
             current_distance, current_node = heapq.heappop(priority_queue)
             if current_distance > distances[current_node]:
                 continue
-            for neighbor, edge_weight in self.__graph[current_node].items():
+            neighbors_and_weights = list(self.__graph[current_node].items())
+            random.shuffle(neighbors_and_weights)
+            for neighbor, edge_weight in neighbors_and_weights:
                 distance = current_distance + edge_weight
                 if distance < distances[neighbor]:
                     distances[neighbor] = distance
@@ -82,6 +84,11 @@ class Net:
         return path[::-1]
 
     def find_path_length_meters(self, path):
+        lanes = traci.lane.getIDList()
+        clear_lanes = []
+        for lane in lanes:
+            if ":" not in lane:
+                clear_lanes.append(lane)
         length_meters = 0
         for edge in path:
             length_meters += traci.lane.getLength(f"{edge}_0")
