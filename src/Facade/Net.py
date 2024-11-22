@@ -1,4 +1,4 @@
-import traci, heapq, random
+import traci, heapq, random, tqdm
 
 
 class Net:
@@ -9,14 +9,23 @@ class Net:
         self.__clear_nodes = self.__find_clear_nodes()
         self.__clear_edges = self.__find_clear_edges()
         self.__extreme_nodes = self.__find_extreme_nodes()
+        print("Construction of incidence matrix...")
         self.__graph = self.__make_graph()
-        print("graph")
+        print("Construction of restore path matrix...")
         self.__restore_path_matrix = self.__make_restore_path_matrix()
-        print("restore")
-        self.__edge_matrix = self.__make_edge_matrix()
 
     def __make_edge_matrix(self):
-        
+        edge_matrix = {}
+        for edge in tqdm.tqdm(self.__clear_edges):
+            node_1 = traci.edge.getFromJunction(edge)
+            node_2 = traci.edge.getToJunction(edge)
+            try:
+                edge_matrix[node_1][node_2] = edge
+            except KeyError:
+                value = {node_2: edge}
+                edge_matrix[node_1] = value
+        return edge_matrix
+
     def __init_distance_and_restore_path_matrices(self):
         dist_matrix = {}
         next_matrix = {}
@@ -35,13 +44,13 @@ class Net:
             next_matrix[node][node] = node
         for node_1 in self.__graph:
             for node_2 in self.__graph[node_1]:
-                dist_matrix[node_1][node_2] = self.__graph[node_1][node_2]
+                dist_matrix[node_1][node_2] = traci.lane.getLength(f"{self.__graph[node_1][node_2]}_0")
                 next_matrix[node_1][node_2] = node_2
         return dist_matrix, next_matrix
 
     def __make_restore_path_matrix(self):
         distance_matrix, restore_path_matrix = self.__init_distance_and_restore_path_matrices()
-        for k in distance_matrix:
+        for k in tqdm.tqdm(distance_matrix):
             for i in distance_matrix:
                 for j in distance_matrix:
                     if distance_matrix[i][j] > distance_matrix[i][k] + distance_matrix[k][j]:
@@ -51,13 +60,13 @@ class Net:
 
     def __make_graph(self):
         graph = {}
-        for edge in self.__clear_edges:
+        for edge in tqdm.tqdm(self.__clear_edges):
             node_1 = traci.edge.getFromJunction(edge)
             node_2 = traci.edge.getToJunction(edge)
             try:
-                graph[node_1][node_2] = traci.lane.getLength(f"{edge}_0")
+                graph[node_1][node_2] = edge
             except KeyError:
-                value = {node_2: traci.lane.getLength(f"{edge}_0")}
+                value = {node_2: edge}
                 graph[node_1] = value
         return graph
 
@@ -95,10 +104,7 @@ class Net:
         if len(path_nodes) == 1:
             return []
         for i in range(1, len(path_nodes)):
-            for edge in self.__clear_edges:
-                if ((traci.edge.getFromJunction(edge) == path_nodes[i - 1]) and
-                        (traci.edge.getToJunction(edge) == path_nodes[i])):
-                    path_edges.append(edge)
+            path_edges.append(self.__graph[path_nodes[i - 1]][path_nodes[i]])
         return path_edges
 
     def get_graph(self):

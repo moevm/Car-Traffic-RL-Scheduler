@@ -22,18 +22,13 @@ class Facade:
         self.__last_target_nodes_data = self.__routes.get_last_target_nodes_data()
 
     def execute(self):
-        # self.__generate_routes()
-        # self.__generate_transport()
         step = 0
         while step < 1000:
             traci.simulationStep()
-            start_time = time.time()
-            if step % 10 == 0:
+            if step % 50 == 0:
                 self.__generate_routes()
                 self.__generate_transport()
             step += 1
-            # print(f"step = {step} time = {time.time() - start_time}")
-        # print(f"max = {max(time_seq)} min = {min(time_seq)} average = {sum(time_seq) / len(time_seq)}")
         traci.close()
 
     def make_statistic(self):

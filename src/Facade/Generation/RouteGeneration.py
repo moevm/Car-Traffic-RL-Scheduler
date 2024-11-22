@@ -61,23 +61,16 @@ class RouteGeneration:
         n_routes = random.randint(1, len(self.__extreme_nodes))
         extreme_nodes = self.__extreme_nodes.copy()
         random.shuffle(extreme_nodes)
-        print(f"len(extreme_nodes) = {len(extreme_nodes)}")
         for i in range(n_routes):
-            start_time_1 = time.time()
             extreme_nodes_tmp = extreme_nodes.copy()
             if self.__target_nodes_data[i].node_id in extreme_nodes_tmp:
                 extreme_nodes_tmp.remove(self.__target_nodes_data[i].node_id)
-            print("1 ", time.time() - start_time_1)
-            start_time_2 = time.time()
             start_node = self.__set_start_node(extreme_nodes_tmp, self.__target_nodes_data[i])
-            print("2 ", time.time() - start_time_2)
             self.__start_node_counter[start_node] += 1
             if start_node in extreme_nodes:
                 extreme_nodes.remove(start_node)
             start_time_3 = time.time()
             path = self.net.get_shortest_path(start_node, self.__target_nodes_data[i].node_id)
-            print("3 ", time.time() - start_time_3)
-            print(start_node, self.__target_nodes_data[i].node_id, path)
             path_length_in_meters = self.net.get_path_length_in_meters(path)
             path_length_in_edges = self.net.get_path_length_in_edges(path)
             self.__target_nodes_data[i].start_nodes_ids.append(start_node)
@@ -86,7 +79,6 @@ class RouteGeneration:
             self.__target_nodes_data[i].path_length_edges.append(path_length_in_edges)
             self.__target_nodes_data[i].last_route_id = self.__route_counter
             self.__route_counter += 1
-            print("4 ", time.time() - start_time_1)
         self.__last_n_routes = n_routes
 
     # def uniform_distribution_for_target_nodes(self):
