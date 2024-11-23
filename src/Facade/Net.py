@@ -1,30 +1,20 @@
-import traci, heapq, random, tqdm
+import traci, heapq, random
+
+from Logger.NetworkLogger import *
 
 
 class Net:
     def __init__(self):
+        self.__network_logger = NetworkLogger()
         self.__INF = float("inf")
         self.__nodes = traci.junction.getIDList()
         self.__edges = traci.edge.getIDList()
         self.__clear_nodes = self.__find_clear_nodes()
         self.__clear_edges = self.__find_clear_edges()
         self.__extreme_nodes = self.__find_extreme_nodes()
-        print("Construction of incidence matrix...")
+        self.__network_logger.print_graph_info(len(self.__clear_edges), len(self.__clear_nodes))
         self.__graph = self.__make_graph()
-        print("Construction of restore path matrix...")
         self.__restore_path_matrix = self.__make_restore_path_matrix()
-
-    def __make_edge_matrix(self):
-        edge_matrix = {}
-        for edge in tqdm.tqdm(self.__clear_edges):
-            node_1 = traci.edge.getFromJunction(edge)
-            node_2 = traci.edge.getToJunction(edge)
-            try:
-                edge_matrix[node_1][node_2] = edge
-            except KeyError:
-                value = {node_2: edge}
-                edge_matrix[node_1] = value
-        return edge_matrix
 
     def __init_distance_and_restore_path_matrices(self):
         dist_matrix = {}
@@ -50,17 +40,22 @@ class Net:
 
     def __make_restore_path_matrix(self):
         distance_matrix, restore_path_matrix = self.__init_distance_and_restore_path_matrices()
-        for k in tqdm.tqdm(distance_matrix):
+        self.__network_logger.init_progress_bar(Message.init_restore_path_matrix, len(distance_matrix))
+        for k in distance_matrix:
+            self.__network_logger.step_progress_bar()
             for i in distance_matrix:
                 for j in distance_matrix:
                     if distance_matrix[i][j] > distance_matrix[i][k] + distance_matrix[k][j]:
                         distance_matrix[i][j] = distance_matrix[i][k] + distance_matrix[k][j]
                         restore_path_matrix[i][j] = restore_path_matrix[i][k]
+        self.__network_logger.destroy_progress_bar()
         return restore_path_matrix
 
     def __make_graph(self):
         graph = {}
-        for edge in tqdm.tqdm(self.__clear_edges):
+        self.__network_logger.init_progress_bar(Message.init_incidence_matrix, len(self.__clear_edges))
+        for edge in self.__clear_edges:
+            self.__network_logger.step_progress_bar()
             node_1 = traci.edge.getFromJunction(edge)
             node_2 = traci.edge.getToJunction(edge)
             try:
@@ -68,6 +63,7 @@ class Net:
             except KeyError:
                 value = {node_2: edge}
                 graph[node_1] = value
+        self.__network_logger.destroy_progress_bar()
         return graph
 
     def __find_clear_edges(self) -> list:

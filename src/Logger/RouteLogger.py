@@ -1,0 +1,21 @@
+from Logger.Logger import Logger
+from prettytable import PrettyTable
+
+class RouteLogger(Logger):
+    def __init__(self):
+        super().__init__("[RouteInfo]")
+
+    def print_routes_data_info(self, message, target_nodes_data):
+        print(f"{self._logger_type} {message.value}")
+        table = PrettyTable()
+        table.field_names = ["target node id", "number of paths, that ends in this target node"]
+        if len(target_nodes_data) > 11:
+            for target_node_data in target_nodes_data[:5]:
+                table.add_row([target_node_data.node_id, len(target_node_data.start_nodes_ids)])
+            table.add_row(["." * 14, "." * 46])
+            for target_node_data in target_nodes_data[-5:]:
+                table.add_row([target_node_data.node_id, len(target_node_data.start_nodes_ids)])
+        else:
+            for target_node_data in target_nodes_data:
+                table.add_row([target_node_data.node_id, len(target_node_data.start_nodes_ids)])
+        print(f"{table}\n")

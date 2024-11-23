@@ -1,13 +1,13 @@
-import time
-
-import traci
-
 from Facade.NodeData import NodeData
-from Facade.Net import Net
 import random
+
+from Logger.Logger import Message
+from Logger.RouteLogger import RouteLogger
+
 
 class RouteGeneration:
     def __init__(self, net):
+        self.__route_logger = RouteLogger()
         self.__coefficient = 10
         self.__route_counter = 0
         self.__last_n_routes = 0
@@ -30,8 +30,6 @@ class RouteGeneration:
 
             target_nodes_data.append(target_node_data)
         return target_nodes_data
-    def generate(self):
-        pass
 
     def __set_start_node(self, extreme_nodes, target_node_data):
         path_length_meters_counter = {}
@@ -55,7 +53,6 @@ class RouteGeneration:
 
     def uniform_distribution_for_target_nodes(self):
         if len(self.__target_nodes_data[0].start_nodes_ids) == self.__coefficient * len(self.__extreme_nodes):
-            print("clear")
             self.__target_nodes_data = self.__init_target_nodes_data()
         self.__target_nodes_data.sort(key=lambda x: len(x.path_length_meters))
         n_routes = random.randint(1, len(self.__extreme_nodes))
@@ -69,7 +66,6 @@ class RouteGeneration:
             self.__start_node_counter[start_node] += 1
             if start_node in extreme_nodes:
                 extreme_nodes.remove(start_node)
-            start_time_3 = time.time()
             path = self.net.get_shortest_path(start_node, self.__target_nodes_data[i].node_id)
             path_length_in_meters = self.net.get_path_length_in_meters(path)
             path_length_in_edges = self.net.get_path_length_in_edges(path)
@@ -80,30 +76,8 @@ class RouteGeneration:
             self.__target_nodes_data[i].last_route_id = self.__route_counter
             self.__route_counter += 1
         self.__last_n_routes = n_routes
-
-    # def uniform_distribution_for_target_nodes(self):
-    #     random.shuffle(self.__target_nodes_data)
-    #     self.__target_nodes_data.sort(key=lambda x: len(x.start_nodes_ids))
-    #     n_routes = random.randint(1, len(self.__extreme_nodes))
-    #     extreme_nodes = self.__extreme_nodes.copy()
-    #     for i in range(n_routes):
-    #         extreme_nodes_tmp = extreme_nodes.copy()
-    #         random.shuffle(extreme_nodes_tmp)
-    #         if self.__target_nodes_data[i].node_id in extreme_nodes_tmp:
-    #             extreme_nodes_tmp.remove(self.__target_nodes_data[i].node_id)
-    #         start_node = random.choice(extreme_nodes_tmp)
-    #         self.__start_node_counter[start_node] += 1
-    #         extreme_nodes_tmp.remove(start_node)
-    #         path = self.net.find_shortest_path(start_node, self.__target_nodes_data[i].node_id)
-    #         path_length_in_meters = self.net.find_path_length_meters(path)
-    #         path_length_in_edges = self.net.find_path_length_edges(path)
-    #         self.__target_nodes_data[i].start_nodes_ids.append(start_node)
-    #         self.__target_nodes_data[i].paths.append(path)
-    #         self.__target_nodes_data[i].path_length_meters.append(path_length_in_meters)
-    #         self.__target_nodes_data[i].path_length_edges.append(path_length_in_edges)
-    #         self.__target_nodes_data[i].routes_ids.append(self.__route_counter)
-    #         self.__route_counter += 1
-    #     self.__last_n_routes = n_routes
+        self.__route_logger.print_routes_data_info(Message.last_target_nodes_data,
+                                                   self.__target_nodes_data[:self.__last_n_routes])
 
     def get_last_target_nodes_data(self):
         last_target_nodes_data = []
@@ -124,3 +98,7 @@ class RouteGeneration:
 
     def get_start_nodes_counter(self):
         return self.__start_node_counter
+
+    def print_all_routes_data_info(self):
+        self.__target_nodes_data.sort(key=lambda x: len(x.path_length_meters))
+        self.__route_logger.print_routes_data_info(Message.target_nodes_data, self.__target_nodes_data)
