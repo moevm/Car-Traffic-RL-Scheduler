@@ -16,7 +16,7 @@ class RouteLogger(Logger):
             for target_node_data in target_nodes_data[:number_of_displayed_target_nodes]:
                 table.add_row([target_node_data.node_id, len(target_node_data.start_nodes_ids)])
             table.add_row(["." * first_column_size, "." * second_column_size])
-            for target_node_data in target_nodes_data[-5:]:
+            for target_node_data in target_nodes_data[-number_of_displayed_target_nodes:]:
                 table.add_row([target_node_data.node_id, len(target_node_data.start_nodes_ids)])
         else:
             for target_node_data in target_nodes_data:
