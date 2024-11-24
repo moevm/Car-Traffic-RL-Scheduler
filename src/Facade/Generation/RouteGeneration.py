@@ -51,6 +51,13 @@ class RouteGeneration:
             if target_node_data.path_length_meters[i] == min_path_length_meters:
                 return target_node_data.start_nodes_ids[i]
 
+    def __add_target_node_data(self, i, start_node, path, path_length_in_meters, path_length_in_edges):
+        self.__target_nodes_data[i].start_nodes_ids.append(start_node)
+        self.__target_nodes_data[i].last_path = path
+        self.__target_nodes_data[i].path_length_meters.append(path_length_in_meters)
+        self.__target_nodes_data[i].path_length_edges.append(path_length_in_edges)
+        self.__target_nodes_data[i].last_route_id = self.__route_counter
+
     def uniform_distribution_for_target_nodes(self):
         if len(self.__target_nodes_data[0].start_nodes_ids) == self.__coefficient * len(self.__extreme_nodes):
             self.__target_nodes_data = self.__init_target_nodes_data()
@@ -69,11 +76,7 @@ class RouteGeneration:
             path = self.net.get_shortest_path(start_node, self.__target_nodes_data[i].node_id)
             path_length_in_meters = self.net.get_path_length_in_meters(path)
             path_length_in_edges = self.net.get_path_length_in_edges(path)
-            self.__target_nodes_data[i].start_nodes_ids.append(start_node)
-            self.__target_nodes_data[i].last_path = path
-            self.__target_nodes_data[i].path_length_meters.append(path_length_in_meters)
-            self.__target_nodes_data[i].path_length_edges.append(path_length_in_edges)
-            self.__target_nodes_data[i].last_route_id = self.__route_counter
+            self.__add_target_node_data(i, start_node, path, path_length_in_meters, path_length_in_edges)
             self.__route_counter += 1
         self.__last_n_routes = n_routes
         self.__route_logger.print_routes_data_info(Message.last_target_nodes_data,
