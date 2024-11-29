@@ -84,7 +84,7 @@ python3 mapGenerator.py -s --number-networks 5 --spider.arm-number-low 10 --spid
 
 #### Инструкции по запуску
 
-В случае запуска не в Docker:
+**В случае запуска не в Docker:**
 1. Установите SUMO: https://sumo.dlr.de/docs/Installing/index.html
 2. Задайте локальную переменную SUMO_HOME (https://sumo.dlr.de/docs/Installing/index.html):
 ```bash
@@ -110,6 +110,8 @@ source <your_venv_name>/bin/activate
 ```bash
 pip install -r ../requirements.txt
 ```
+**Команды далее применимы и для Docker после того, как Вы вошли в контейнер:**
+
 8. Если карты уже сгенерированы, то данный шаг следует опустить. В ином случае можно, например сгенерировать 5 случайных карт, параметры который были описаны ранее:
 ```bash
 python3 mapGenerator.py -r --number-networks 5 --rand.iterations-low 500 --rand.iterations-high 1000 --rand.max-distance-low 200 --rand.max-distance-high 400 --rand.min-distance-low 50 --rand.min-distance-high 150 --rand.min-angle-low 30 --rand.min-angle-high 60 --rand.neighbor-dist5-low 5 --rand.neighbor-dist5-high 10
