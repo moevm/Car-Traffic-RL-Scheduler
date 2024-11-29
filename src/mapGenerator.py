@@ -1,6 +1,6 @@
 import sys, random, os, json
 from sys import argv
-
+import xml.etree.ElementTree as ET
 
 def get_grid_cli() -> dict:
     with open("base-cli-params/grid-config.json", "r") as file:
@@ -94,6 +94,13 @@ def assign_spider_attach_params(base_cli: dict, netgenerate_cli: dict) -> None:
     netgenerate_cli["--spider.attach-length"] = spider_attach_dict[param]
     return
 
+def make_sumocfg(net_name, base_filename):
+    configuration = ET.Element("configuration")
+    input_element = ET.SubElement(configuration, "input")
+    ET.SubElement(input_element, "net-file", value=f"{net_name}.net.xml")
+    tree = ET.ElementTree(configuration)
+    tree.write(f"configs/{base_filename}-configs/{net_name}.sumocfg")
+
 def handle_args(argv_list: list) -> None:
     base_cli = init_cli(argv_list)
     cli = {list(base_cli.items())[0][0]: "true"}
@@ -115,10 +122,11 @@ def handle_args(argv_list: list) -> None:
         command = "netgenerate "
         for key, value in netgenerate_cli.items():
             command += f"{str(key)} {str(value)} "
-        command += f"-o generated-nets/{base_filename}-nets/{base_filename + str(i)}.net.xml"
+        net_name = f"{base_filename + str(i)}"
+        command += f"-o configs/{base_filename}-configs/{net_name}.net.xml"
         print(command)
         os.system(command)
-
+        make_sumocfg(net_name, base_filename)
 
 if __name__ == "__main__":
     handle_args(argv[1:])
