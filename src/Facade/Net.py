@@ -1,55 +1,89 @@
 import traci, heapq, random
-
+from multiprocessing import Process, Manager
 from Logger.NetworkLogger import *
 
 
 class Net:
-    def __init__(self):
+    def __init__(self, config_file):
+        self.config_file = config_file
+        sumo_cmd = ["sumo", "-c", self.config_file]
+        traci.start(sumo_cmd)
         self.__network_logger = NetworkLogger()
         self.__INF = float("inf")
         self.__nodes = traci.junction.getIDList()
         self.__edges = traci.edge.getIDList()
         self.__clear_nodes = self.__find_clear_nodes()
         self.__clear_edges = self.__find_clear_edges()
+        self.__edges_length = {edge: traci.lane.getLength(f"{edge}_0") for edge in self.__clear_edges}
         self.__extreme_nodes = self.__find_extreme_nodes()
         self.__network_logger.print_graph_info(len(self.__clear_edges), len(self.__clear_nodes))
         self.__graph = self.__make_graph()
-        self.__restore_path_matrix = self.__make_restore_path_matrix()
+        traci.close()
+        #self.__restore_path_matrix = self.__make_restore_path_matrix()
+        self.__restore_path_matrix = self.__parallel_make_restore_path_matrix()
 
-    def __init_distance_and_restore_path_matrices(self):
-        dist_matrix = {}
-        next_matrix = {}
-        for node_1 in self.__clear_nodes:
-            for node_2 in self.__clear_nodes:
-                try:
-                    dist_matrix[node_1][node_2] = self.__INF
-                    next_matrix[node_1][node_2] = None
-                except KeyError:
-                    value = {node_2: self.__INF}
-                    dist_matrix[node_1] = value
-                    value = {node_2: None}
-                    next_matrix[node_1] = value
-        for node in self.__clear_nodes:
-            dist_matrix[node][node] = 0
-            next_matrix[node][node] = node
-        for node_1 in self.__graph:
-            for node_2 in self.__graph[node_1]:
-                dist_matrix[node_1][node_2] = traci.lane.getLength(f"{self.__graph[node_1][node_2]}_0")
-                next_matrix[node_1][node_2] = node_2
-        return dist_matrix, next_matrix
-
-    def __make_restore_path_matrix(self):
-        distance_matrix, restore_path_matrix = self.__init_distance_and_restore_path_matrices()
-        self.__network_logger.init_progress_bar(Message.init_restore_path_matrix, len(distance_matrix))
-        for k in distance_matrix:
+    def __parallel_make_restore_path_matrix(self):
+        self.__network_logger.init_progress_bar(Message.init_restore_path_matrix, len(self.__extreme_nodes))
+        manager = Manager()
+        restore_path_matrix = manager.dict()
+        processes = []
+        for start_node in self.__extreme_nodes:
+            process = Process(target=self.__make_restore_path_matrix, args=(start_node, restore_path_matrix))
+            processes.append(process)
+            process.start()
+        for process in processes:
+            process.join()
             self.__network_logger.step_progress_bar()
-            for i in distance_matrix:
-                for j in distance_matrix:
-                    if distance_matrix[i][j] > distance_matrix[i][k] + distance_matrix[k][j]:
-                        distance_matrix[i][j] = distance_matrix[i][k] + distance_matrix[k][j]
-                        restore_path_matrix[i][j] = restore_path_matrix[i][k]
         self.__network_logger.destroy_progress_bar()
         return restore_path_matrix
+    '''
+    Либо вызывать Дейкстру для каждой висячей вершины + точек спавна авто
+    Либо вызывать A* в runtime
+    '''
+    # def __make_restore_path_matrix(self):
+    #     restore_path_matrix = {}
+    #     self.__network_logger.init_progress_bar(Message.init_restore_path_matrix, len(self.__extreme_nodes))
+    #     for start_node in self.__extreme_nodes:
+    #         self.__network_logger.step_progress_bar()
+    #         distances = {node: self.__INF for node in self.__clear_nodes}
+    #         distances[start_node] = 0
+    #         priority_queue = [(0, start_node)]
+    #         previous_nodes = {node: None for node in self.__clear_nodes}
+    #         while priority_queue:
+    #             current_distance, current_node = heapq.heappop(priority_queue)
+    #             if current_distance > distances[current_node]:
+    #                 continue
+    #             neighbors = list(self.__graph[current_node].items())
+    #             random.shuffle(neighbors)
+    #             for neighbor_node, edge in neighbors:
+    #                 distance = current_distance + traci.lane.getLength(f"{edge}_0")
+    #                 if distance < distances[neighbor_node]:
+    #                     distances[neighbor_node] = distance
+    #                     previous_nodes[neighbor_node] = current_node
+    #                     heapq.heappush(priority_queue, (distance, neighbor_node))
+    #         restore_path_matrix[start_node] = previous_nodes
+    #     self.__network_logger.destroy_progress_bar()
+    #     return restore_path_matrix
+
+    def __make_restore_path_matrix(self, start_node, restore_path_matrix):
+        self.__network_logger.step_progress_bar()
+        distances = {node: self.__INF for node in self.__clear_nodes}
+        distances[start_node] = 0
+        priority_queue = [(0, start_node)]
+        previous_nodes = {node: None for node in self.__clear_nodes}
+        while priority_queue:
+            current_distance, current_node = heapq.heappop(priority_queue)
+            if current_distance > distances[current_node]:
+                continue
+            neighbors = list(self.__graph[current_node].items())
+            random.shuffle(neighbors)
+            for neighbor_node, edge in neighbors:
+                distance = current_distance + self.__edges_length[edge]
+                if distance < distances[neighbor_node]:
+                    distances[neighbor_node] = distance
+                    previous_nodes[neighbor_node] = current_node
+                    heapq.heappush(priority_queue, (distance, neighbor_node))
+        restore_path_matrix[start_node] = previous_nodes
 
     def __make_graph(self):
         graph = {}
@@ -65,6 +99,7 @@ class Net:
                 graph[node_1] = value
         self.__network_logger.destroy_progress_bar()
         return graph
+
 
     def __find_clear_edges(self) -> list:
         clear_edges = []
@@ -88,20 +123,19 @@ class Net:
                 extreme_nodes.append(node)
         return extreme_nodes
 
+
     def get_shortest_path(self, start_node, end_node):
-        if self.__restore_path_matrix[start_node][end_node] is None:
-            return []
-        path_nodes = [start_node]
-        path_edges = []
-        node = start_node
-        while node != end_node:
-            node = self.__restore_path_matrix[node][end_node]
-            path_nodes.append(node)
-        if len(path_nodes) == 1:
-            return []
-        for i in range(1, len(path_nodes)):
-            path_edges.append(self.__graph[path_nodes[i - 1]][path_nodes[i]])
-        return path_edges
+        previous_nodes = self.__restore_path_matrix[start_node]
+        path = []
+        node = end_node
+        while node != start_node:
+            node_1 = node
+            node_2 = previous_nodes[node_1]
+            edge = self.__graph[node_2][node_1]
+            node = node_2
+            path.append(edge)
+        print(f"len = {len(path)}")
+        return path[::-1]
 
     def get_graph(self):
         return self.__graph
@@ -120,36 +154,3 @@ class Net:
 
     def get_path_length_in_edges(self, path):
         return len(path)
-
-    # def __dijkstra_algorithm(self, start_node):
-    #     distances = {node: self.__INF for node in self.__clear_nodes}
-    #     distances[start_node] = 0
-    #     priority_queue = [(0, start_node)]
-    #     previous_nodes = {node: None for node in self.__clear_nodes}
-    #     while priority_queue:
-    #         current_distance, current_node = heapq.heappop(priority_queue)
-    #         if current_distance > distances[current_node]:
-    #             continue
-    #         neighbors_and_weights = list(self.__graph[current_node].items())
-    #         random.shuffle(neighbors_and_weights)
-    #         for neighbor, edge_weight in neighbors_and_weights:
-    #             distance = current_distance + edge_weight
-    #             if distance < distances[neighbor]:
-    #                 distances[neighbor] = distance
-    #                 previous_nodes[neighbor] = current_node
-    #                 heapq.heappush(priority_queue, (distance, neighbor))
-    #     return previous_nodes
-    #
-    # def __make_path(self, start_node, end_node, previous_nodes):
-    #     path = []
-    #     node = end_node
-    #     while node != start_node:
-    #         node_1 = node
-    #         node_2 = previous_nodes[node]
-    #         edge = node_2 + node_1
-    #         path.append(edge)
-    #     return path[::-1]
-
-    # def find_shortest_path(self, start_node, end_node):
-    #     previous_nodes = self.__dijkstra_algorithm(start_node)
-    #     return self.__make_path(start_node, end_node, previous_nodes)

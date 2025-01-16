@@ -1,15 +1,13 @@
-import traci, time
-from Facade.Generation.TransportGeneration import *
-from Facade.Generation.RouteGeneration import *
-from Facade.Net import *
+import traci
+from Facade.Generation.TransportGeneration import TransportGeneration
+from Facade.Generation.RouteGeneration import RouteGeneration
+from Facade.Net import Net
+
 
 class Facade:
     def __init__(self, config_file: str):
         self.config_file = config_file
-        sumo_cmd = ["sumo-gui", "-c", self.config_file]
-        traci.start(sumo_cmd)
-        traci.simulationStep()
-        self.net = Net()
+        self.net = Net(self.config_file)
         self.__routes = RouteGeneration(self.net)
         self.__transport = TransportGeneration()
         self.__last_target_nodes_data = []
@@ -26,5 +24,7 @@ class Facade:
         self.__routes.print_all_routes_data_info()
 
     def execute(self):
+        sumo_cmd = ["sumo-gui", "-c", self.config_file]
+        traci.start(sumo_cmd)
         self.__generate_initial_traffic()
         traci.close()
