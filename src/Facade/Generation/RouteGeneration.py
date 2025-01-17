@@ -1,9 +1,13 @@
+from enum import Enum
 from Facade.NodeData import NodeData
 import random
 
 from Logger.Logger import Message
 from Logger.RouteLogger import RouteLogger
 
+class StartNodeType(Enum):
+    extreme_node = 1
+    poisson_generator = 2
 
 class RouteGeneration:
     def __init__(self, net):
@@ -13,11 +17,9 @@ class RouteGeneration:
         self.__last_n_routes = 0
         self.net = net
         self.__extreme_nodes = self.net.get_extreme_nodes()
-        self.__start_node_counter = {node: 0 for node in self.__extreme_nodes}
         self.__target_nodes = self.net.get_clear_nodes()
-        clear_nodes = self.net.get_clear_nodes()
-        random.shuffle(clear_nodes)
-        self.__poisson_generators = clear_nodes[:len(self.__extreme_nodes)] # генераторов столько же, сколько и висячих вершин
+        self.__poisson_generators = self.net.get_poisson_generators()
+        self.__start_node_counter = {node: 0 for node in (self.__extreme_nodes + self.__poisson_generators)}
         self.__target_nodes_data = self.__init_target_nodes_data()
 
     def __init_target_nodes_data(self):
@@ -61,21 +63,28 @@ class RouteGeneration:
         self.__target_nodes_data[i].path_length_edges.append(path_length_in_edges)
         self.__target_nodes_data[i].last_route_id = self.__route_counter
 
-    def uniform_distribution_for_target_nodes(self):
-        if len(self.__target_nodes_data[0].start_nodes_ids) == self.__coefficient * len(self.__extreme_nodes):
+    def make_routes(self, start_node_type):
+        if len(self.__target_nodes_data[0].start_nodes_ids) == self.__coefficient * len(self.__extreme_nodes +
+                                                                                        self.__poisson_generators):
             self.__target_nodes_data = self.__init_target_nodes_data()
         self.__target_nodes_data.sort(key=lambda x: len(x.path_length_meters))
-        n_routes = random.randint(1, len(self.__extreme_nodes))
-        extreme_nodes = self.__extreme_nodes.copy()
-        random.shuffle(extreme_nodes)
+        match start_node_type:
+            case StartNodeType.extreme_node:
+                start_nodes = self.__extreme_nodes.copy()
+            case StartNodeType.poisson_generator:
+                start_nodes = self.__poisson_generators.copy()
+            case _:
+                start_nodes = []
+        n_routes = random.randint(1, len(start_nodes))
+        random.shuffle(start_nodes)
         for i in range(n_routes):
-            extreme_nodes_tmp = extreme_nodes.copy()
-            if self.__target_nodes_data[i].node_id in extreme_nodes_tmp:
-                extreme_nodes_tmp.remove(self.__target_nodes_data[i].node_id)
-            start_node = self.__set_start_node(extreme_nodes_tmp, self.__target_nodes_data[i])
+            start_nodes_tmp = start_nodes.copy()
+            if self.__target_nodes_data[i].node_id in start_nodes_tmp:
+                start_nodes_tmp.remove(self.__target_nodes_data[i].node_id)
+            start_node = self.__set_start_node(start_nodes_tmp, self.__target_nodes_data[i])
             self.__start_node_counter[start_node] += 1
-            if start_node in extreme_nodes:
-                extreme_nodes.remove(start_node)
+            if start_node in start_nodes:
+                start_nodes.remove(start_node)
             path = self.net.get_shortest_path(start_node, self.__target_nodes_data[i].node_id)
             path_length_in_meters = self.net.get_path_length_in_meters(path)
             path_length_in_edges = self.net.get_path_length_in_edges(path)

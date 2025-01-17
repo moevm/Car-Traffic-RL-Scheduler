@@ -18,28 +18,36 @@ class Net:
         self.__extreme_nodes = self.__find_extreme_nodes()
         self.__network_logger.print_graph_info(len(self.__clear_edges), len(self.__clear_nodes))
         self.__graph = self.__make_graph()
+        clear_nodes = self.get_clear_nodes() # рёбра должны быть
+        random.shuffle(clear_nodes)
+        number_of_poisson_generators = len(clear_nodes) // 100 # считать из конфига
+        self.__poisson_generators = clear_nodes[:number_of_poisson_generators]
         traci.close()
-        #self.__restore_path_matrix = self.__make_restore_path_matrix()
+        # self.__restore_path_matrix = self.__make_restore_path_matrix()
         self.__restore_path_matrix = self.__parallel_make_restore_path_matrix()
 
     def __parallel_make_restore_path_matrix(self):
-        self.__network_logger.init_progress_bar(Message.init_restore_path_matrix, len(self.__extreme_nodes))
+        start_nodes = self.__extreme_nodes + self.__poisson_generators
+        self.__network_logger.init_progress_bar(Message.init_restore_path_matrix, len(start_nodes))
         manager = Manager()
         restore_path_matrix = manager.dict()
         processes = []
-        for start_node in self.__extreme_nodes:
+        for start_node in start_nodes:
             process = Process(target=self.__make_restore_path_matrix, args=(start_node, restore_path_matrix))
             processes.append(process)
             process.start()
         for process in processes:
-            self.__network_logger.step_progress_bar() # тут гонка за данными, нужно что-то вроде мьютекса
+            self.__network_logger.step_progress_bar()  # тут гонка за данными, нужно что-то вроде мьютекса
             process.join()
         self.__network_logger.destroy_progress_bar()
+        print(f"len of start nodes = {len(start_nodes)}; len of poisson generators = {len(self.__poisson_generators)}")
         return restore_path_matrix
+
     '''
     Либо вызывать Дейкстру для каждой висячей вершины + точек спавна авто
     Либо вызывать A* в runtime
     '''
+
     # def __make_restore_path_matrix(self):
     #     restore_path_matrix = {}
     #     self.__network_logger.init_progress_bar(Message.init_restore_path_matrix, len(self.__extreme_nodes))
@@ -100,7 +108,6 @@ class Net:
         self.__network_logger.destroy_progress_bar()
         return graph
 
-
     def __find_clear_edges(self) -> list:
         clear_edges = []
         for edge in self.__edges:
@@ -126,6 +133,7 @@ class Net:
     '''
     Сильно тормозит при edges кол-ве узлово около 10к. проблема?
     '''
+
     def get_shortest_path(self, start_node, end_node):
         previous_nodes = self.__restore_path_matrix[start_node]
         path = []
@@ -146,6 +154,9 @@ class Net:
 
     def get_clear_nodes(self) -> list:
         return self.__clear_nodes
+
+    def get_poisson_generators(self):
+        return self.__poisson_generators
 
     def get_path_length_in_meters(self, path):
         length_meters = 0
