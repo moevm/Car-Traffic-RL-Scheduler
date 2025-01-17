@@ -1,4 +1,4 @@
-import traci, heapq, random
+import traci, heapq, random, time
 from multiprocessing import Process, Manager
 from Logger.NetworkLogger import *
 
@@ -32,8 +32,8 @@ class Net:
             processes.append(process)
             process.start()
         for process in processes:
+            self.__network_logger.step_progress_bar() # тут гонка за данными, нужно что-то вроде мьютекса
             process.join()
-            self.__network_logger.step_progress_bar()
         self.__network_logger.destroy_progress_bar()
         return restore_path_matrix
     '''
@@ -123,7 +123,9 @@ class Net:
                 extreme_nodes.append(node)
         return extreme_nodes
 
-
+    '''
+    Сильно тормозит при edges кол-ве узлово около 10к. проблема?
+    '''
     def get_shortest_path(self, start_node, end_node):
         previous_nodes = self.__restore_path_matrix[start_node]
         path = []
@@ -134,7 +136,6 @@ class Net:
             edge = self.__graph[node_2][node_1]
             node = node_2
             path.append(edge)
-        print(f"len = {len(path)}")
         return path[::-1]
 
     def get_graph(self):

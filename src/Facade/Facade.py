@@ -6,6 +6,7 @@ from Facade.Net import Net
 
 class Facade:
     def __init__(self, config_file: str):
+        self.__steps_of_simulation = 1000
         self.config_file = config_file
         self.net = Net(self.config_file)
         self.__routes = RouteGeneration(self.net)
@@ -14,7 +15,7 @@ class Facade:
 
     def __generate_initial_traffic(self):
         step = 0
-        while step < 1000:
+        while step < self.__steps_of_simulation:
             traci.simulationStep()
             if step % 50 == 0:
                 self.__routes.uniform_distribution_for_target_nodes()

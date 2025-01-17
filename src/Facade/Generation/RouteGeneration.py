@@ -1,5 +1,5 @@
 from Facade.NodeData import NodeData
-import random, time
+import random
 
 from Logger.Logger import Message
 from Logger.RouteLogger import RouteLogger
@@ -15,6 +15,9 @@ class RouteGeneration:
         self.__extreme_nodes = self.net.get_extreme_nodes()
         self.__start_node_counter = {node: 0 for node in self.__extreme_nodes}
         self.__target_nodes = self.net.get_clear_nodes()
+        clear_nodes = self.net.get_clear_nodes()
+        random.shuffle(clear_nodes)
+        self.__poisson_generators = clear_nodes[:len(self.__extreme_nodes)] # генераторов столько же, сколько и висячих вершин
         self.__target_nodes_data = self.__init_target_nodes_data()
 
     def __init_target_nodes_data(self):
@@ -42,16 +45,11 @@ class RouteGeneration:
             min_path_length_meters = min(path_length_meters_counter.items(), key=lambda item: item[1])[0]
         else:
             min_path_length_meters = -1
-        cp_1 = time.time()
         for extreme_node in extreme_nodes:
             path = self.net.get_shortest_path(extreme_node, target_node_data.node_id)
             path_length_in_meters = self.net.get_path_length_in_meters(path)
             if path_length_in_meters not in path_length_meters_counter:
-                cp_2 = time.time()
-                print(f"extra: {cp_2 - cp_1}")
                 return extreme_node
-        cp_2 = time.time()
-        print(f"extra: {cp_2 - cp_1}")
         for i in range(len(target_node_data.path_length_meters)):
             if target_node_data.path_length_meters[i] == min_path_length_meters:
                 return target_node_data.start_nodes_ids[i]
@@ -74,20 +72,15 @@ class RouteGeneration:
             extreme_nodes_tmp = extreme_nodes.copy()
             if self.__target_nodes_data[i].node_id in extreme_nodes_tmp:
                 extreme_nodes_tmp.remove(self.__target_nodes_data[i].node_id)
-            cp_1 = time.time()
             start_node = self.__set_start_node(extreme_nodes_tmp, self.__target_nodes_data[i])
-            cp_2 = time.time()
             self.__start_node_counter[start_node] += 1
             if start_node in extreme_nodes:
                 extreme_nodes.remove(start_node)
-            cp_3 = time.time()
             path = self.net.get_shortest_path(start_node, self.__target_nodes_data[i].node_id)
-            cp_4 = time.time()
             path_length_in_meters = self.net.get_path_length_in_meters(path)
             path_length_in_edges = self.net.get_path_length_in_edges(path)
             self.__add_target_node_data(i, start_node, path, path_length_in_meters, path_length_in_edges)
             self.__route_counter += 1
-            print(f"(21): {cp_2 - cp_1}; (32): {cp_3 - cp_2}; (43): {cp_4 - cp_3}")
         self.__last_n_routes = n_routes
         self.__route_logger.print_routes_data_info(Message.last_target_nodes_data,
                                                    self.__target_nodes_data[:self.__last_n_routes])
