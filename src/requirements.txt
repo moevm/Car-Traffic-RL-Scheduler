@@ -3,3 +3,6 @@ progress==1.6
 sumolib==1.21.0
 traci==1.21.0
 wcwidth==0.2.13
+
+numpy==2.2.1
+click==8.1.8

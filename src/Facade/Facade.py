@@ -15,7 +15,6 @@ class Facade:
         self.net = Net(self.config_file)
         self.__poisson_generators = self.net.get_poisson_generators()
         self.__traffic_intensity = [random.uniform(0, 0.5) for _ in range(len(self.__poisson_generators))]
-
         self.__routes = RouteGeneration(self.net)
         self.__transport = TransportGeneration()
         self.__last_target_nodes_data = []
