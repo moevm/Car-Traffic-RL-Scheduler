@@ -1,15 +1,15 @@
 from enum import Enum
-from Facade.NodeData import NodeData
+from facade.structures import NodeData
 import random
 
-from Logger.Logger import Message
-from Logger.RouteLogger import RouteLogger
+from facade.logger.logger import Message
+from facade.logger.route_logger import RouteLogger
 
 class StartNodeType(Enum):
     extreme_node = 1
     poisson_generator = 2
 
-class RouteGeneration:
+class RouteGenerator:
     def __init__(self, net):
         self.__route_logger = RouteLogger()
         self.__coefficient = 10

@@ -40,7 +40,7 @@ def main(duration: int, iterations: int, generators: int, file: str, sumo_config
     intensities = generate_intensities(generators, duration)
     poisson_generators = generate_poisson_generators(sumo_config, generators)
     data = {"duration": duration, "iterations": iterations, "intensities": intensities,
-            "poisson_generators": poisson_generators}
+            "poisson_generators_edges": poisson_generators}
     with open(file, 'w') as json_file:
         json.dump(data, json_file)
 if __name__ == "__main__":

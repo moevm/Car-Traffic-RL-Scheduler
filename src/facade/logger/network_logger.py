@@ -1,4 +1,4 @@
-from Logger.Logger import *
+from facade.logger.logger import *
 
 
 class NetworkLogger(Logger):

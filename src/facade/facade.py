@@ -1,23 +1,30 @@
 import random
+import json
 import numpy as np
 import traci
 
-from Facade.Generation.RouteGeneration import RouteGeneration, StartNodeType
-from Facade.Generation.TransportGeneration import TransportGeneration
-from Facade.Net import Net
+from facade.generation.route_generator import RouteGenerator, StartNodeType
+from facade.generation.transport_generator import TransportGenerator
+from facade.net import Net
+from facade.structures import SimulationParams
 
 
 class Facade:
-    def __init__(self, config_file: str):
+    def __init__(self, sumo_config: str, simulation_parameters_file: str):
         self.__start_node_type = StartNodeType
-        self.__steps_of_simulation = 1000
-        self.config_file = config_file
-        self.net = Net(self.config_file)
-        self.__poisson_generators = self.net.get_poisson_generators()
-        self.__traffic_intensity = [random.uniform(0, 0.5) for _ in range(len(self.__poisson_generators))]
-        self.__routes = RouteGeneration(self.net)
-        self.__transport = TransportGeneration()
+        self.sumo_config = sumo_config
+        self.simulation_parameters_file = simulation_parameters_file
+        self.__simulation_params = self.__get_simulation_params_from_file()
+        self.net = Net(self.sumo_config, self.__simulation_params)
+        self.__routes = RouteGenerator(self.net)
+        self.__transport = TransportGenerator()
         self.__last_target_nodes_data = []
+
+    def __get_simulation_params_from_file(self):
+        with open(self.simulation_parameters_file, 'r', encoding='utf-8') as json_file:
+            data = json.load(json_file)
+        simulation_params = SimulationParams(**data)
+        return simulation_params
 
     def __generate_initial_traffic(self):
         step = 0
@@ -26,7 +33,7 @@ class Facade:
         self.__last_target_nodes_data = self.__routes.get_last_target_nodes_data()
         self.__transport.generate(self.__last_target_nodes_data)
         self.__routes.print_all_routes_data_info()
-        while step < self.__steps_of_simulation:
+        while step < self.__simulation_params.duration:
             traci.simulationStep()
             '''
             здесь надо брать время отправления автомобилей из экспоненциалього распределения
@@ -40,7 +47,7 @@ class Facade:
             step += 1
 
     def execute(self):
-        sumo_cmd = ["sumo-gui", "-c", self.config_file]
+        sumo_cmd = ["sumo-gui", "-c", self.sumo_config]
         traci.start(sumo_cmd)
         self.__generate_initial_traffic()
         traci.close()

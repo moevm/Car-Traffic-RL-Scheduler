@@ -1,4 +1,4 @@
-from Logger.Logger import Logger
+from facade.logger.logger import Logger
 from prettytable import PrettyTable
 
 class RouteLogger(Logger):

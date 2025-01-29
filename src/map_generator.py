@@ -1,4 +1,7 @@
-import sys, random, os, json
+import sys
+import random
+import os
+import json
 from sys import argv
 import xml.etree.ElementTree as ET
 

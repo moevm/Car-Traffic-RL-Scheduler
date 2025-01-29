@@ -1,8 +1,8 @@
 import random
-
 import traci
 
-class TransportGeneration:
+
+class TransportGenerator:
     def __init__(self):
         self.__transport_counter = 0
 
