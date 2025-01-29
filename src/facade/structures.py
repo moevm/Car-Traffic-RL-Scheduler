@@ -12,6 +12,7 @@ class NodeData:
 @dataclass
 class SimulationParams:
     duration: int
+    initialization_delay: int
     iterations: int
     intensities: list
     poisson_generators_edges: list

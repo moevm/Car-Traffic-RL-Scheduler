@@ -7,8 +7,8 @@ from facade.structures import SimulationParams
 
 
 class Net:
-    def __init__(self, config_file: str, simulation_params: SimulationParams):
-        self.sumo_config = config_file
+    def __init__(self, sumo_config: str, simulation_params: SimulationParams):
+        self.sumo_config = sumo_config
         sumo_cmd = ["sumo", "-c", self.sumo_config]
         traci.start(sumo_cmd)
         self.__network_logger = NetworkLogger()
@@ -21,8 +21,9 @@ class Net:
         self.__extreme_nodes = self.__find_extreme_nodes()
         self.__network_logger.print_graph_info(len(self.__clear_edges), len(self.__clear_nodes))
         self.__graph = self.__make_graph()
-        self.__poisson_generators_nodes = [traci.edge.getFromJunction(edge)
+        self.__poisson_generators_nodes = [traci.edge.getToJunction(edge)
                                            for edge in simulation_params.poisson_generators_edges]
+        self.__poisson_generators_edges = simulation_params.poisson_generators_edges
         traci.close()
         # self.__restore_path_matrix = self.__make_restore_path_matrix()
         self.__restore_path_matrix = self.__parallel_make_restore_path_matrix()
@@ -41,7 +42,8 @@ class Net:
             self.__network_logger.step_progress_bar()  # тут гонка за данными, нужно что-то вроде мьютекса
             process.join()
         self.__network_logger.destroy_progress_bar()
-        print(f"len of start nodes = {len(start_nodes)}; len of poisson generators = {len(self.__poisson_generators_nodes)}")
+        print(
+            f"len of start nodes = {len(start_nodes)}; len of poisson generators = {len(self.__poisson_generators_nodes)}")
         return restore_path_matrix
 
     '''
@@ -155,6 +157,9 @@ class Net:
 
     def get_clear_nodes(self) -> list:
         return self.__clear_nodes
+
+    def get_poisson_generators_edges(self):
+        return self.__poisson_generators_edges
 
     def get_poisson_generators_nodes(self):
         return self.__poisson_generators_nodes
