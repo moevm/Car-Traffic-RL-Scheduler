@@ -3,14 +3,10 @@ import heapq
 import random
 from multiprocessing import Process, Manager
 from facade.logger.network_logger import *
-from facade.structures import SimulationParams
 
 
 class Net:
-    def __init__(self, sumo_config: str, simulation_params: SimulationParams):
-        self.sumo_config = sumo_config
-        sumo_cmd = ["sumo", "-c", self.sumo_config]
-        traci.start(sumo_cmd)
+    def __init__(self):
         self.__network_logger = NetworkLogger()
         self.__INF = float("inf")
         self.__nodes = traci.junction.getIDList()
@@ -21,30 +17,34 @@ class Net:
         self.__extreme_nodes = self.__find_extreme_nodes()
         self.__network_logger.print_graph_info(len(self.__clear_edges), len(self.__clear_nodes))
         self.__graph = self.__make_graph()
-        self.__poisson_generators_nodes = [traci.edge.getToJunction(edge)
-                                           for edge in simulation_params.poisson_generators_edges]
-        self.__poisson_generators_edges = simulation_params.poisson_generators_edges
-        traci.close()
+        (self.__poisson_generators_to_nodes, self.__poisson_generators_from_nodes, self.__poisson_generators_edges,
+         self.__restore_path_matrix) = [], [], [], {}
         # self.__restore_path_matrix = self.__make_restore_path_matrix()
-        self.__restore_path_matrix = self.__parallel_make_restore_path_matrix()
 
-    def __parallel_make_restore_path_matrix(self):
-        start_nodes = self.__extreme_nodes + self.__poisson_generators_nodes
+    def init_poisson_generators(self, poisson_generators_edges: list):
+        self.__poisson_generators_to_nodes = [traci.edge.getToJunction(edge) for edge in poisson_generators_edges]
+        self.__poisson_generators_from_nodes = [traci.edge.getFromJunction(edge) for edge in poisson_generators_edges]
+        self.__poisson_generators_edges = poisson_generators_edges
+
+    def parallel_make_restore_path_matrix(self):
+        start_nodes = self.__extreme_nodes + self.__poisson_generators_to_nodes
         self.__network_logger.init_progress_bar(Message.init_restore_path_matrix, len(start_nodes))
         manager = Manager()
         restore_path_matrix = manager.dict()
         processes = []
-        for start_node in start_nodes:
-            process = Process(target=self.__make_restore_path_matrix, args=(start_node, restore_path_matrix))
+        for i, start_node in enumerate(start_nodes):
+            if i < len(self.__extreme_nodes):
+                process = Process(target=self.__make_restore_path_matrix, args=(start_node, restore_path_matrix))
+            else:
+                real_start_node = self.__poisson_generators_from_nodes[i - len(self.__extreme_nodes)]
+                process = Process(target=self.__make_restore_path_matrix, args=(start_node, restore_path_matrix, real_start_node))
             processes.append(process)
             process.start()
         for process in processes:
             self.__network_logger.step_progress_bar()  # тут гонка за данными, нужно что-то вроде мьютекса
             process.join()
         self.__network_logger.destroy_progress_bar()
-        print(
-            f"len of start nodes = {len(start_nodes)}; len of poisson generators = {len(self.__poisson_generators_nodes)}")
-        return restore_path_matrix
+        self.__restore_path_matrix = restore_path_matrix
 
     '''
     Либо вызывать Дейкстру для каждой висячей вершины + точек спавна авто
@@ -76,7 +76,7 @@ class Net:
     #     self.__network_logger.destroy_progress_bar()
     #     return restore_path_matrix
 
-    def __make_restore_path_matrix(self, start_node, restore_path_matrix):
+    def __make_restore_path_matrix(self, start_node, restore_path_matrix, real_start_node=None):
         self.__network_logger.step_progress_bar()
         distances = {node: self.__INF for node in self.__clear_nodes}
         distances[start_node] = 0
@@ -87,6 +87,8 @@ class Net:
             if current_distance > distances[current_node]:
                 continue
             neighbors = list(self.__graph[current_node].items())
+            if current_node == start_node and real_start_node is not None:
+                neighbors = [(neighbor_node, edge) for neighbor_node, edge in neighbors if neighbor_node != real_start_node]
             random.shuffle(neighbors)
             for neighbor_node, edge in neighbors:
                 distance = current_distance + self.__edges_length[edge]
@@ -103,9 +105,9 @@ class Net:
             self.__network_logger.step_progress_bar()
             node_1 = traci.edge.getFromJunction(edge)
             node_2 = traci.edge.getToJunction(edge)
-            try:
+            if node_1 in graph:
                 graph[node_1][node_2] = edge
-            except KeyError:
+            else:
                 value = {node_2: edge}
                 graph[node_1] = value
         self.__network_logger.destroy_progress_bar()
@@ -158,11 +160,17 @@ class Net:
     def get_clear_nodes(self) -> list:
         return self.__clear_nodes
 
+    def get_clear_edges(self) -> list:
+        return self.__clear_edges
+
     def get_poisson_generators_edges(self):
         return self.__poisson_generators_edges
 
-    def get_poisson_generators_nodes(self):
-        return self.__poisson_generators_nodes
+    def get_poisson_generators_to_nodes(self):
+        return self.__poisson_generators_to_nodes
+
+    def get_poisson_generators_from_nodes(self):
+        return self.__poisson_generators_from_nodes
 
     def get_path_length_in_meters(self, path):
         length_meters = 0

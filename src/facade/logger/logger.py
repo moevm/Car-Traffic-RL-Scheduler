@@ -7,6 +7,7 @@ class Message(enum.Enum):
     init_restore_path_matrix = "Construction of restore-path matrix..."
     last_target_nodes_data = "Last target nodes data:"
     target_nodes_data = "Target nodes data:"
+    search_for_valid_edges = "Search for valid edges:"
 
 class Logger(ABC):
     def __init__(self, logger_type):

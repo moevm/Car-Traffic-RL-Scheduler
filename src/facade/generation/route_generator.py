@@ -5,9 +5,6 @@ import traci
 from facade.logger.logger import Message
 from facade.logger.route_logger import RouteLogger
 
-class StartNodeType(Enum):
-    extreme_node = 1
-    poisson_generator = 2
 
 class RouteGenerator:
     def __init__(self, net):
@@ -19,8 +16,9 @@ class RouteGenerator:
         self.__extreme_nodes = self.net.get_extreme_nodes()
         self.__target_nodes = self.net.get_clear_nodes()
         self.__poisson_generators_edges = self.net.get_poisson_generators_edges()
-        self.__poisson_generators_nodes = self.net.get_poisson_generators_nodes()
-        self.__start_node_counter = {node: 0 for node in (self.__extreme_nodes + self.__poisson_generators_nodes)}
+        self.__poisson_generators_from_nodes = self.net.get_poisson_generators_from_nodes()
+        self.__poisson_generators_to_nodes = self.net.get_poisson_generators_to_nodes()
+        self.__start_node_counter = {node: 0 for node in (self.__extreme_nodes + self.__poisson_generators_from_nodes)}
         self.__target_nodes_data = self.__init_target_nodes_data()
 
     def __init_target_nodes_data(self):
@@ -40,9 +38,9 @@ class RouteGenerator:
     def __set_start_node(self, start_nodes, target_node_data):
         path_length_meters_counter = {}
         for path_length_in_meters in target_node_data.path_length_meters:
-            try:
+            if path_length_in_meters in path_length_meters_counter:
                 path_length_meters_counter[path_length_in_meters] += 1
-            except KeyError:
+            else:
                 path_length_meters_counter[path_length_in_meters] = 1
         if path_length_meters_counter:
             min_path_length_meters = min(path_length_meters_counter.items(), key=lambda item: item[1])[0]
@@ -66,29 +64,36 @@ class RouteGenerator:
 
     def make_routes(self, poisson_generators_edges=None):
         if len(self.__target_nodes_data[0].start_nodes_ids) == self.__COEFFICIENT * len(self.__extreme_nodes +
-                                                                                        self.__poisson_generators_nodes):
+                                                                                        self.__poisson_generators_to_nodes):
             self.__target_nodes_data = self.__init_target_nodes_data()
         self.__target_nodes_data.sort(key=lambda x: len(x.path_length_meters))
         if poisson_generators_edges is None:
             start_nodes = self.__extreme_nodes.copy()
         else:
-            start_nodes = [traci.edge.getToJunction(edge) for edge in poisson_generators_edges]
+            start_nodes = [traci.edge.getToJunction(edge)
+                           for edge in poisson_generators_edges]
+            from_nodes = [traci.edge.getFromJunction(edge)
+                          for edge in poisson_generators_edges]
         n_routes = len(start_nodes)
         for i in range(n_routes):
             start_nodes_tmp = start_nodes.copy()
-            if self.__target_nodes_data[i].node_id in start_nodes_tmp:
+            if self.__target_nodes_data[i].node_id in start_nodes_tmp:  # чтобы пункт назначения не совпал со стартовым
                 start_nodes_tmp.remove(self.__target_nodes_data[i].node_id)
             start_node = self.__set_start_node(start_nodes_tmp, self.__target_nodes_data[i])
-            self.__start_node_counter[start_node] += 1
             if start_node in start_nodes:
-                start_nodes.remove(start_node)
+                index = start_nodes.index(start_node)
+                start_nodes.remove(start_node)  # за 1 шаг симуляции из одной точки можно отправить только 1 авто
             path = self.net.get_shortest_path(start_node, self.__target_nodes_data[i].node_id)
+            if poisson_generators_edges is not None:
+                edge = poisson_generators_edges.pop(index)
+                start_node = from_nodes.pop(index)
+                path.insert(0, edge)
+            print(path)
             path_length_in_meters = self.net.get_path_length_in_meters(path)
             path_length_in_edges = self.net.get_path_length_in_edges(path)
-            if poisson_generators_edges is not None:
-                path = [poisson_generators_edges]
             self.__add_target_node_data(i, start_node, path, path_length_in_meters, path_length_in_edges)
             self.__route_counter += 1
+            self.__start_node_counter[start_node] += 1
         self.__last_n_routes = n_routes
         self.__route_logger.print_routes_data_info(Message.last_target_nodes_data,
                                                    self.__target_nodes_data[:self.__last_n_routes])
