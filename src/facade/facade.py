@@ -25,7 +25,6 @@ class Facade:
         self.__traffic_control = TrafficControl(self.__simulation_params.intensities,
                                                 self.__simulation_params.poisson_generators_edges,
                                                 self.__simulation_params.duration, self.net.get_clear_edges())
-        self.__dataset = []
         self.__step = 0
 
     def __get_simulation_params_from_file(self):
@@ -41,7 +40,7 @@ class Facade:
                 self.__route_generator.make_routes()
                 self.__last_target_nodes_data = self.__route_generator.get_last_target_nodes_data()
                 self.__transport_generator.generate(self.__last_target_nodes_data)
-                self.__route_generator.print_all_routes_data_info()
+                #self.__route_generator.print_all_routes_data_info()
             self.__step += 1
         self.__traffic_control.init_vehicles_data(self.__transport_generator.get_vehicles_data())
         while self.__step < self.__simulation_params.duration:
@@ -58,12 +57,12 @@ class Facade:
                 self.__route_generator.make_routes(schedule[self.__step])
                 self.__last_target_nodes_data = self.__route_generator.get_last_target_nodes_data()
                 self.__transport_generator.generate(self.__last_target_nodes_data)
-                self.__route_generator.print_all_routes_data_info()
+                # self.__route_generator.print_all_routes_data_info()
             self.__step += 1
 
     def execute(self):
         sumo_cmd = ["sumo-gui", "-c", self.sumo_config]
         traci.start(sumo_cmd)
-        # self.__generate_initial_traffic()
+        self.__generate_initial_traffic()
         self.__generate_main_traffic()
         traci.close()

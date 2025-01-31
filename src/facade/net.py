@@ -1,7 +1,7 @@
 import traci
 import heapq
 import random
-from multiprocessing import Process, Manager
+from multiprocessing import Process, Manager, Lock
 from facade.logger.network_logger import *
 
 
@@ -30,6 +30,7 @@ class Net:
         start_nodes = self.__extreme_nodes + self.__poisson_generators_to_nodes
         self.__network_logger.init_progress_bar(Message.init_restore_path_matrix, len(start_nodes))
         manager = Manager()
+        lock = Lock()
         restore_path_matrix = manager.dict()
         processes = []
         for i, start_node in enumerate(start_nodes):
@@ -41,8 +42,9 @@ class Net:
             processes.append(process)
             process.start()
         for process in processes:
-            self.__network_logger.step_progress_bar()  # тут гонка за данными, нужно что-то вроде мьютекса
             process.join()
+            with lock:
+                self.__network_logger.step_progress_bar()
         self.__network_logger.destroy_progress_bar()
         self.__restore_path_matrix = restore_path_matrix
 

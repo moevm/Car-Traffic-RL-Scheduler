@@ -1,4 +1,7 @@
 from enum import Enum
+
+from numpy.ma.core import indices
+
 from facade.structures import NodeData
 import traci
 
@@ -18,9 +21,9 @@ class RouteGenerator:
         self.__poisson_generators_edges = self.net.get_poisson_generators_edges()
         self.__poisson_generators_from_nodes = self.net.get_poisson_generators_from_nodes()
         self.__poisson_generators_to_nodes = self.net.get_poisson_generators_to_nodes()
-        self.__start_node_counter = {node: 0 for node in (self.__extreme_nodes + self.__poisson_generators_from_nodes)}
+        self.__start_node_counter = {node: 0 for node in (self.__extreme_nodes + self.__poisson_generators_to_nodes)}
         self.__target_nodes_data = self.__init_target_nodes_data()
-
+        self.__last_indices = []
     def __init_target_nodes_data(self):
         target_nodes_data = []
         for node_id in self.__target_nodes:
@@ -35,7 +38,14 @@ class RouteGenerator:
             target_nodes_data.append(target_node_data)
         return target_nodes_data
 
-    def __set_start_node(self, start_nodes, target_node_data):
+    """
+    если start_nodes -- это пуассоновские генераторы, то нужно к path добавить edge
+    1) проверить код для случая, если работаем с пачками для инициализации
+    2) можно отправляться только из тех узлов, которые указаны в start_nodes если речь о пуассоновских потоках
+    3) очистка
+    """
+
+    def __set_start_node_from_extreme_nodes(self, start_nodes, target_node_data):
         path_length_meters_counter = {}
         for path_length_in_meters in target_node_data.path_length_meters:
             if path_length_in_meters in path_length_meters_counter:
@@ -50,9 +60,48 @@ class RouteGenerator:
             path = self.net.get_shortest_path(start_node, target_node_data.node_id)
             path_length_in_meters = self.net.get_path_length_in_meters(path)
             if path_length_in_meters not in path_length_meters_counter:
+                # print(f"1 {start_node} {start_nodes}")
                 return start_node
         for i in range(len(target_node_data.path_length_meters)):
             if target_node_data.path_length_meters[i] == min_path_length_meters:
+                return target_node_data.start_nodes_ids[i]
+
+    def __set_start_node_from_poisson_generators(self, start_nodes, target_node_data):
+        path_length_meters_counter = {}
+        n = len(target_node_data.path_length_meters)
+        filtered_target_node_data = NodeData(node_id=target_node_data.node_id,
+                                             last_path=[],
+                                             start_nodes_ids=[],
+                                             path_length_meters=[],
+                                             path_length_edges=[],
+                                             last_route_id=0
+                                             )
+        for i in range(n):
+            for start_node in start_nodes:
+                if target_node_data.start_nodes_ids[i] == start_node:
+                    filtered_target_node_data.path_length_meters.append(target_node_data.path_length_meters[i])
+        target_node_data = filtered_target_node_data
+        for path_length_in_meters in target_node_data.path_length_meters:
+            if path_length_in_meters in path_length_meters_counter:
+                path_length_meters_counter[path_length_in_meters] += 1
+            else:
+                path_length_meters_counter[path_length_in_meters] = 1
+        if path_length_meters_counter:
+            min_path_length_meters = min(path_length_meters_counter.items(), key=lambda item: item[1])[0]
+        else:
+            min_path_length_meters = -1
+        for start_node in start_nodes:
+            path = self.net.get_shortest_path(start_node, target_node_data.node_id)
+            path_length_in_meters = self.net.get_path_length_in_meters(path)
+            if path_length_in_meters not in path_length_meters_counter:
+                print(f"first {start_node} {start_nodes}")
+                return start_node
+        for i in range(len(target_node_data.path_length_meters)):
+            if target_node_data.path_length_meters[i] == min_path_length_meters:
+                """
+                данный сценарий нужно протестировать на маленьких картах
+                """
+                print(f"second {target_node_data.start_nodes_ids[i]} {target_node_data.start_nodes_ids}")
                 return target_node_data.start_nodes_ids[i]
 
     def __add_target_node_data(self, i, start_node, path, path_length_in_meters, path_length_in_edges):
@@ -70,44 +119,52 @@ class RouteGenerator:
         if poisson_generators_edges is None:
             start_nodes = self.__extreme_nodes.copy()
         else:
-            start_nodes = [traci.edge.getToJunction(edge)
-                           for edge in poisson_generators_edges]
-            from_nodes = [traci.edge.getFromJunction(edge)
-                          for edge in poisson_generators_edges]
+            start_nodes = [traci.edge.getToJunction(edge) for edge in poisson_generators_edges]
+        indices = []
+        for i in range(len(self.__target_nodes_data)):
+            included = False
+            for start_node in start_nodes:
+                if start_node == self.__target_nodes_data[i].node_id:
+                    included = True
+                    break
+            if not included:
+                indices.append(i)
+            if len(indices) == len(start_nodes):
+                break
+        self.__last_indices = indices
         n_routes = len(start_nodes)
-        for i in range(n_routes):
-            start_nodes_tmp = start_nodes.copy()
-            if self.__target_nodes_data[i].node_id in start_nodes_tmp:  # чтобы пункт назначения не совпал со стартовым
-                start_nodes_tmp.remove(self.__target_nodes_data[i].node_id)
-            start_node = self.__set_start_node(start_nodes_tmp, self.__target_nodes_data[i])
+        for i in indices:
+            if poisson_generators_edges is None:
+                start_node = self.__set_start_node_from_extreme_nodes(start_nodes, self.__target_nodes_data[i])
+            else:
+                start_node = self.__set_start_node_from_poisson_generators(start_nodes, self.__target_nodes_data[i])
             if start_node in start_nodes:
                 index = start_nodes.index(start_node)
-                start_nodes.remove(start_node)  # за 1 шаг симуляции из одной точки можно отправить только 1 авто
+                start_nodes.remove(start_node)
+            print(i, n_routes, start_node, start_nodes)
             path = self.net.get_shortest_path(start_node, self.__target_nodes_data[i].node_id)
             if poisson_generators_edges is not None:
                 edge = poisson_generators_edges.pop(index)
-                start_node = from_nodes.pop(index)
                 path.insert(0, edge)
-            print(path)
             path_length_in_meters = self.net.get_path_length_in_meters(path)
             path_length_in_edges = self.net.get_path_length_in_edges(path)
             self.__add_target_node_data(i, start_node, path, path_length_in_meters, path_length_in_edges)
             self.__route_counter += 1
             self.__start_node_counter[start_node] += 1
         self.__last_n_routes = n_routes
-        self.__route_logger.print_routes_data_info(Message.last_target_nodes_data,
-                                                   self.__target_nodes_data[:self.__last_n_routes])
-
+        # self.__route_logger.print_routes_data_info(Message.last_target_nodes_data,
+        #                                            self.__target_nodes_data[:self.__last_n_routes])
+        print('\n\n')
     def get_last_target_nodes_data(self):
         last_target_nodes_data = []
-        for target_node_data in self.__target_nodes_data[:self.__last_n_routes]:
+        for i in self.__last_indices:
             last_target_node_data = NodeData(
-                node_id=target_node_data.node_id,
-                last_path=target_node_data.last_path,
-                start_nodes_ids=[target_node_data.start_nodes_ids[-1]],
-                path_length_meters=[target_node_data.path_length_meters[-1]],
-                path_length_edges=[target_node_data.path_length_meters[-1]],
-                last_route_id=target_node_data.last_route_id
+                node_id=self.__target_nodes_data[i].node_id,
+                last_path=self.__target_nodes_data[i].last_path,
+                start_nodes_ids=[self.__target_nodes_data[i].start_nodes_ids[-1]],
+                path_length_meters=[self.__target_nodes_data[i].path_length_meters[-1]],
+                path_length_edges=[self.__target_nodes_data[i].path_length_meters[-1]],
+                last_route_id=self.__target_nodes_data[i].last_route_id
             )
             last_target_nodes_data.append(last_target_node_data)
         return last_target_nodes_data
