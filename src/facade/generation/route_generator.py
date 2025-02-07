@@ -1,7 +1,3 @@
-from enum import Enum
-
-from numpy.ma.core import indices
-
 from facade.structures import NodeData
 import traci
 
@@ -15,15 +11,16 @@ class RouteGenerator:
         self.__COEFFICIENT = 10
         self.__route_counter = 0
         self.__last_n_routes = 0
-        self.net = net
-        self.__extreme_nodes = self.net.get_extreme_nodes()
-        self.__target_nodes = self.net.get_clear_nodes()
-        self.__poisson_generators_edges = self.net.get_poisson_generators_edges()
-        self.__poisson_generators_from_nodes = self.net.get_poisson_generators_from_nodes()
-        self.__poisson_generators_to_nodes = self.net.get_poisson_generators_to_nodes()
+        self.__net = net
+        self.__extreme_nodes = self.__net.get_extreme_nodes()
+        self.__target_nodes = self.__net.get_clear_nodes()
+        self.__poisson_generators_edges = self.__net.get_poisson_generators_edges()
+        self.__poisson_generators_from_nodes = self.__net.get_poisson_generators_from_nodes()
+        self.__poisson_generators_to_nodes = self.__net.get_poisson_generators_to_nodes()
         self.__start_node_counter = {node: 0 for node in (self.__extreme_nodes + self.__poisson_generators_to_nodes)}
         self.__target_nodes_data = self.__init_target_nodes_data()
         self.__last_indices = []
+
     def __init_target_nodes_data(self):
         target_nodes_data = []
         for node_id in self.__target_nodes:
@@ -45,6 +42,9 @@ class RouteGenerator:
     3) очистка
     """
 
+    """
+    
+    """
     def __set_start_node_from_extreme_nodes(self, start_nodes, target_node_data):
         path_length_meters_counter = {}
         for path_length_in_meters in target_node_data.path_length_meters:
@@ -57,10 +57,9 @@ class RouteGenerator:
         else:
             min_path_length_meters = -1
         for start_node in start_nodes:
-            path = self.net.get_shortest_path(start_node, target_node_data.node_id)
-            path_length_in_meters = self.net.get_path_length_in_meters(path)
+            path = self.__net.get_shortest_path(start_node, target_node_data.node_id)
+            path_length_in_meters = self.__net.get_path_length_in_meters(path)
             if path_length_in_meters not in path_length_meters_counter:
-                # print(f"1 {start_node} {start_nodes}")
                 return start_node
         for i in range(len(target_node_data.path_length_meters)):
             if target_node_data.path_length_meters[i] == min_path_length_meters:
@@ -91,17 +90,15 @@ class RouteGenerator:
         else:
             min_path_length_meters = -1
         for start_node in start_nodes:
-            path = self.net.get_shortest_path(start_node, target_node_data.node_id)
-            path_length_in_meters = self.net.get_path_length_in_meters(path)
+            path = self.__net.get_shortest_path(start_node, target_node_data.node_id)
+            path_length_in_meters = self.__net.get_path_length_in_meters(path)
             if path_length_in_meters not in path_length_meters_counter:
-                print(f"first {start_node} {start_nodes}")
                 return start_node
         for i in range(len(target_node_data.path_length_meters)):
             if target_node_data.path_length_meters[i] == min_path_length_meters:
                 """
                 данный сценарий нужно протестировать на маленьких картах
                 """
-                print(f"second {target_node_data.start_nodes_ids[i]} {target_node_data.start_nodes_ids}")
                 return target_node_data.start_nodes_ids[i]
 
     def __add_target_node_data(self, i, start_node, path, path_length_in_meters, path_length_in_edges):
@@ -111,15 +108,7 @@ class RouteGenerator:
         self.__target_nodes_data[i].path_length_edges.append(path_length_in_edges)
         self.__target_nodes_data[i].last_route_id = self.__route_counter
 
-    def make_routes(self, poisson_generators_edges=None):
-        if len(self.__target_nodes_data[0].start_nodes_ids) == self.__COEFFICIENT * len(self.__extreme_nodes +
-                                                                                        self.__poisson_generators_to_nodes):
-            self.__target_nodes_data = self.__init_target_nodes_data()
-        self.__target_nodes_data.sort(key=lambda x: len(x.path_length_meters))
-        if poisson_generators_edges is None:
-            start_nodes = self.__extreme_nodes.copy()
-        else:
-            start_nodes = [traci.edge.getToJunction(edge) for edge in poisson_generators_edges]
+    def __find_indices_of_suitable_target_nodes(self, start_nodes):
         indices = []
         for i in range(len(self.__target_nodes_data)):
             included = False
@@ -131,6 +120,18 @@ class RouteGenerator:
                 indices.append(i)
             if len(indices) == len(start_nodes):
                 break
+        return indices
+
+    def make_routes(self, poisson_generators_edges=None):
+        if len(self.__target_nodes_data[0].start_nodes_ids) == self.__COEFFICIENT * len(self.__extreme_nodes +
+                                                                                        self.__poisson_generators_to_nodes):
+            self.__target_nodes_data = self.__init_target_nodes_data()
+        self.__target_nodes_data.sort(key=lambda x: len(x.path_length_meters))
+        if poisson_generators_edges is None:
+            start_nodes = self.__extreme_nodes.copy()
+        else:
+            start_nodes = [traci.edge.getToJunction(edge) for edge in poisson_generators_edges]
+        indices = self.__find_indices_of_suitable_target_nodes(start_nodes)
         self.__last_indices = indices
         n_routes = len(start_nodes)
         for i in indices:
@@ -141,20 +142,19 @@ class RouteGenerator:
             if start_node in start_nodes:
                 index = start_nodes.index(start_node)
                 start_nodes.remove(start_node)
-            print(i, n_routes, start_node, start_nodes)
-            path = self.net.get_shortest_path(start_node, self.__target_nodes_data[i].node_id)
+            path = self.__net.get_shortest_path(start_node, self.__target_nodes_data[i].node_id)
             if poisson_generators_edges is not None:
                 edge = poisson_generators_edges.pop(index)
                 path.insert(0, edge)
-            path_length_in_meters = self.net.get_path_length_in_meters(path)
-            path_length_in_edges = self.net.get_path_length_in_edges(path)
+            path_length_in_meters = self.__net.get_path_length_in_meters(path)
+            path_length_in_edges = self.__net.get_path_length_in_edges(path)
             self.__add_target_node_data(i, start_node, path, path_length_in_meters, path_length_in_edges)
             self.__route_counter += 1
             self.__start_node_counter[start_node] += 1
         self.__last_n_routes = n_routes
-        # self.__route_logger.print_routes_data_info(Message.last_target_nodes_data,
-        #                                            self.__target_nodes_data[:self.__last_n_routes])
-        print('\n\n')
+        self.__route_logger.print_routes_data_info(Message.last_target_nodes_data,
+                                                   self.__target_nodes_data[:self.__last_n_routes])
+
     def get_last_target_nodes_data(self):
         last_target_nodes_data = []
         for i in self.__last_indices:

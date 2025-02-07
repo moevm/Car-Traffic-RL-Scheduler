@@ -80,7 +80,7 @@ def main(duration: int, iterations: int, generators: int, file: str, init_delay,
     """
     intensities = generate_intensities(generators, duration)
     poisson_generators = generate_poisson_generators(sumo_config, generators)
-    data = {"duration": duration, "initialization_delay": init_delay, "iterations": iterations,
+    data = {"DURATION": duration, "INIT_DELAY": init_delay, "ITERATIONS": iterations,
             "intensities": intensities, "poisson_generators_edges": poisson_generators}
     with open(file, 'w') as json_file:
         json.dump(data, json_file)
