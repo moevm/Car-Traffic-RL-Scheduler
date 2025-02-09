@@ -57,7 +57,7 @@ class Facade:
                 self.__route_generator.make_routes(schedule[self.__step])
                 self.__last_target_nodes_data = self.__route_generator.get_last_target_nodes_data()
                 self.__transport_generator.generate(self.__last_target_nodes_data)
-                self.__route_generator.print_all_routes_data_info()
+                #self.__route_generator.print_all_routes_data_info()
             self.__step += 1
 
     def execute(self):

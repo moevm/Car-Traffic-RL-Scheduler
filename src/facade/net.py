@@ -21,7 +21,7 @@ class Net:
          self.__restore_path_matrix) = [], [], [], {}
         # self.__restore_path_matrix = self.__make_restore_path_matrix()
 
-    def init_poisson_generators(self, poisson_generators_edges: list):
+    def init_poisson_generators(self, poisson_generators_edges: list[str]):
         self.__poisson_generators_to_nodes = [traci.edge.getToJunction(edge) for edge in poisson_generators_edges]
         self.__poisson_generators_from_nodes = [traci.edge.getFromJunction(edge) for edge in poisson_generators_edges]
         self.__poisson_generators_edges = poisson_generators_edges
@@ -37,8 +37,9 @@ class Net:
             if i < len(self.__extreme_nodes):
                 process = Process(target=self.__make_restore_path_matrix, args=(start_node, restore_path_matrix))
             else:
-                real_start_node = self.__poisson_generators_from_nodes[i - len(self.__extreme_nodes)]
-                process = Process(target=self.__make_restore_path_matrix, args=(start_node, restore_path_matrix, real_start_node))
+                prev_node = self.__poisson_generators_from_nodes[i - len(self.__extreme_nodes)]
+                process = Process(target=self.__make_restore_path_matrix,
+                                  args=(start_node, restore_path_matrix, prev_node))
             processes.append(process)
             process.start()
         for process in processes:
@@ -78,26 +79,25 @@ class Net:
     #     self.__network_logger.destroy_progress_bar()
     #     return restore_path_matrix
 
-    def __make_restore_path_matrix(self, start_node, restore_path_matrix, real_start_node=None):
+    def __make_restore_path_matrix(self, start_node, restore_path_matrix, prev_node=None):
         self.__network_logger.step_progress_bar()
         distances = {node: self.__INF for node in self.__clear_nodes}
         distances[start_node] = 0
-        priority_queue = [(0, start_node)]
+        priority_queue = [(0, start_node, prev_node)]
         previous_nodes = {node: None for node in self.__clear_nodes}
         while priority_queue:
-            current_distance, current_node = heapq.heappop(priority_queue)
+            current_distance, current_node, prev_node = heapq.heappop(priority_queue)
             if current_distance > distances[current_node]:
                 continue
             neighbors = list(self.__graph[current_node].items())
-            if current_node == start_node and real_start_node is not None:
-                neighbors = [(neighbor_node, edge) for neighbor_node, edge in neighbors if neighbor_node != real_start_node]
             random.shuffle(neighbors)
             for neighbor_node, edge in neighbors:
-                distance = current_distance + self.__edges_length[edge]
-                if distance < distances[neighbor_node]:
-                    distances[neighbor_node] = distance
-                    previous_nodes[neighbor_node] = current_node
-                    heapq.heappush(priority_queue, (distance, neighbor_node))
+                if neighbor_node != prev_node:
+                    distance = current_distance + self.__edges_length[edge]
+                    if distance < distances[neighbor_node]:
+                        distances[neighbor_node] = distance
+                        previous_nodes[neighbor_node] = current_node
+                        heapq.heappush(priority_queue, (distance, neighbor_node, current_node))
         restore_path_matrix[start_node] = previous_nodes
 
     def __make_graph(self):
@@ -152,6 +152,9 @@ class Net:
             node = node_2
             path.append(edge)
         return path[::-1]
+
+    def get_restore_path_matrix(self):
+        return self.__restore_path_matrix
 
     def get_graph(self):
         return self.__graph

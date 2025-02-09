@@ -2,35 +2,33 @@ import click
 import random
 import traci
 import json
-import queue
 from facade.net import Net
 from facade.logger.network_logger import NetworkLogger
 from facade.logger.logger import Message
+
 
 def generate_intensities(n_generators: int, duration: int) -> list:
     intensities = [random.uniform(1 / duration, 0.5) for i in range(n_generators)]
     return intensities
 
+
 """
 выбираем только те рёбра-генраторы, из которых достижима любая точка в графе. недостижимость связана с тем, что
 нельзя делать лупбэк по одному и тому же ребру
 """
-def bfs(start_node: str, graph: dict, clear_nodes: list) -> bool:
-    q = queue.Queue()
-    q.put(start_node)
-    visited = set()
-    visited.add(start_node)
-    while not q.empty():
-        current_node = q.get()
-        neighbors = graph[current_node]
-        for node, edge in neighbors.items():
-            if node not in visited:
-                q.put(node)
-                visited.add(node)
-    if len(visited) == len(clear_nodes):
-        return True
-    else:
-        return False
+
+
+def is_there_cycle(prev_node: str, current_node: str, graph: dict[str, dict[str, str]], colors: dict[str, int]):
+    colors[current_node] = 1
+    neighbors = graph[current_node]
+    for node, edge in neighbors.items():
+        if node != prev_node:
+            if colors[node] == 0:
+                return is_there_cycle(current_node, node, graph, colors)
+            if colors[node] == 1:
+                return True
+    colors[current_node] = 2
+    return False
 
 
 def generate_poisson_generators(sumo_config: str, n_generators: int) -> list:
@@ -44,9 +42,11 @@ def generate_poisson_generators(sumo_config: str, n_generators: int) -> list:
     graph = net.get_graph()
     clear_edges = net.get_clear_edges()
     clear_nodes = net.get_clear_nodes()
+    random.shuffle(clear_edges)
+    colors = {node: 0 for node in clear_nodes}
     for i, edge in enumerate(clear_edges):
         network_logger.step_progress_bar()
-        if bfs(traci.edge.getToJunction(edge), graph, clear_nodes):
+        if is_there_cycle(traci.edge.getFromJunction(edge), traci.edge.getToJunction(edge), graph, colors):
             possible_edges.append(edge)
         if len(possible_edges) == n_generators:
             break
@@ -60,7 +60,6 @@ def generate_poisson_generators(sumo_config: str, n_generators: int) -> list:
             "Number of Poisson generators is greater than number of possible edges. The number of Poisson generators will be "
             "set equal to the number of possible edges in the graph.")
         n_generators = len(possible_edges)
-    random.shuffle(possible_edges)
     return possible_edges[:n_generators]
 
 
@@ -70,7 +69,7 @@ def generate_poisson_generators(sumo_config: str, n_generators: int) -> list:
                                                               'of iterations of initial traffic generation.')
 @click.option('--generators', '-g', type=int, default=1, help='number of poisson generators.')
 @click.option('--file', '-f', type=str, default='./configs/simulation-parameters/simulation_parameters.json',
-              help='path to SUMO config file (.sumocfg).')
+              help='path to simulation parameters config file (.sumocfg).')
 @click.option('--init-delay', '-n', type=int, default=10, help='delay between vehicle departures during map '
                                                                'initialization by traffic.')
 @click.argument('sumo_config', nargs=1, type=str)

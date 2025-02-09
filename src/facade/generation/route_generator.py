@@ -8,7 +8,6 @@ from facade.logger.route_logger import RouteLogger
 class RouteGenerator:
     def __init__(self, net):
         self.__route_logger = RouteLogger()
-        self.__COEFFICIENT = 10
         self.__route_counter = 0
         self.__last_n_routes = 0
         self.__net = net
@@ -42,10 +41,7 @@ class RouteGenerator:
     3) очистка
     """
 
-    """
-    
-    """
-    def __set_start_node_from_extreme_nodes(self, start_nodes, target_node_data):
+    def __find_min_path_length_meters_counter(self, target_node_data):
         path_length_meters_counter = {}
         for path_length_in_meters in target_node_data.path_length_meters:
             if path_length_in_meters in path_length_meters_counter:
@@ -53,20 +49,24 @@ class RouteGenerator:
             else:
                 path_length_meters_counter[path_length_in_meters] = 1
         if path_length_meters_counter:
-            min_path_length_meters = min(path_length_meters_counter.items(), key=lambda item: item[1])[0]
+            min_path_length_meters_counter = min(path_length_meters_counter.items(), key=lambda item: item[1])[0]
         else:
-            min_path_length_meters = -1
+            min_path_length_meters_counter = -1
+        return min_path_length_meters_counter, path_length_meters_counter
+
+    def __set_start_node_from_extreme_nodes(self, start_nodes, target_node_data):
+        min_path_length_meters_counter, path_length_meters_counter = self.__find_min_path_length_meters_counter(
+            target_node_data)
         for start_node in start_nodes:
             path = self.__net.get_shortest_path(start_node, target_node_data.node_id)
             path_length_in_meters = self.__net.get_path_length_in_meters(path)
             if path_length_in_meters not in path_length_meters_counter:
                 return start_node
         for i in range(len(target_node_data.path_length_meters)):
-            if target_node_data.path_length_meters[i] == min_path_length_meters:
+            if target_node_data.path_length_meters[i] == min_path_length_meters_counter:
                 return target_node_data.start_nodes_ids[i]
 
-    def __set_start_node_from_poisson_generators(self, start_nodes, target_node_data):
-        path_length_meters_counter = {}
+    def __get_filtered_target_node_data(self, target_node_data, start_nodes):
         n = len(target_node_data.path_length_meters)
         filtered_target_node_data = NodeData(node_id=target_node_data.node_id,
                                              last_path=[],
@@ -79,27 +79,28 @@ class RouteGenerator:
             for start_node in start_nodes:
                 if target_node_data.start_nodes_ids[i] == start_node:
                     filtered_target_node_data.path_length_meters.append(target_node_data.path_length_meters[i])
-        target_node_data = filtered_target_node_data
-        for path_length_in_meters in target_node_data.path_length_meters:
-            if path_length_in_meters in path_length_meters_counter:
-                path_length_meters_counter[path_length_in_meters] += 1
-            else:
-                path_length_meters_counter[path_length_in_meters] = 1
-        if path_length_meters_counter:
-            min_path_length_meters = min(path_length_meters_counter.items(), key=lambda item: item[1])[0]
-        else:
-            min_path_length_meters = -1
+                    filtered_target_node_data.start_nodes_ids.append(target_node_data.start_nodes_ids[i])
+        return filtered_target_node_data
+
+    """9932"""
+
+    def __set_start_node_from_poisson_generators(self, start_nodes, target_node_data):
+        filtered_target_node_data = self.__get_filtered_target_node_data(target_node_data, start_nodes)
+        min_path_length_meters_counter, path_length_meters_counter = self.__find_min_path_length_meters_counter(
+            filtered_target_node_data)
         for start_node in start_nodes:
-            path = self.__net.get_shortest_path(start_node, target_node_data.node_id)
+            print(start_node, filtered_target_node_data.node_id)
+            path = self.__net.get_shortest_path(start_node, filtered_target_node_data.node_id)
             path_length_in_meters = self.__net.get_path_length_in_meters(path)
             if path_length_in_meters not in path_length_meters_counter:
                 return start_node
-        for i in range(len(target_node_data.path_length_meters)):
-            if target_node_data.path_length_meters[i] == min_path_length_meters:
+        for i in range(len(filtered_target_node_data.path_length_meters)):
+            if filtered_target_node_data.path_length_meters[i] == min_path_length_meters_counter:
                 """
                 данный сценарий нужно протестировать на маленьких картах
                 """
-                return target_node_data.start_nodes_ids[i]
+                print("YES\n\n")
+                return filtered_target_node_data.start_nodes_ids[i]
 
     def __add_target_node_data(self, i, start_node, path, path_length_in_meters, path_length_in_edges):
         self.__target_nodes_data[i].start_nodes_ids.append(start_node)
@@ -123,8 +124,8 @@ class RouteGenerator:
         return indices
 
     def make_routes(self, poisson_generators_edges=None):
-        if len(self.__target_nodes_data[0].start_nodes_ids) == self.__COEFFICIENT * len(self.__extreme_nodes +
-                                                                                        self.__poisson_generators_to_nodes):
+        if len(self.__target_nodes_data[0].start_nodes_ids) == len(self.__extreme_nodes +
+                                                                   self.__poisson_generators_to_nodes):
             self.__target_nodes_data = self.__init_target_nodes_data()
         self.__target_nodes_data.sort(key=lambda x: len(x.path_length_meters))
         if poisson_generators_edges is None:

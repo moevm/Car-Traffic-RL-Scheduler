@@ -40,6 +40,7 @@ class TrafficControl:
         for vehicle_id in vehicles:
             sum_current_distances += traci.vehicle.getDistance(vehicle_id)
             sum_full_distances += self.__vehicles_data[vehicle_id]
+        print(sum_current_distances / sum_full_distances)
         if sum_current_distances >= sum_full_distances / 2:
             return True
         else:
