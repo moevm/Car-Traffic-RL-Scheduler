@@ -2,6 +2,7 @@ import traci
 import heapq
 import random
 from multiprocessing import Process, Manager, Lock
+
 from facade.logger.network_logger import *
 
 
@@ -48,6 +49,7 @@ class Net:
                 self.__network_logger.step_progress_bar()
         self.__network_logger.destroy_progress_bar()
         self.__restore_path_matrix = restore_path_matrix
+        self.__find_way_back()
 
     '''
     Либо вызывать Дейкстру для каждой висячей вершины + точек спавна авто
@@ -79,7 +81,45 @@ class Net:
     #     self.__network_logger.destroy_progress_bar()
     #     return restore_path_matrix
 
-    def __make_restore_path_matrix(self, start_node, restore_path_matrix, prev_node=None):
+    def __find_cycle(self, prev_node: str, current_node: str, colors: dict[str, int]) -> str:
+        colors[current_node] = 1
+        neighbors = self.__graph[current_node]
+        for node, edge in neighbors.items():
+            if node != prev_node:
+                if colors[node] == 0:  # магические числа!!!
+                    return self.__find_cycle(current_node, node, colors)
+                if colors[node] == 1:
+                    return node
+        colors[current_node] = 2
+
+    def __find_lightest_cycle(self, to_node, from_node):
+        restore_path_matrix = {}
+        colors = {node: 0 for node in self.__clear_nodes}
+        start_node = self.__find_cycle(from_node, to_node, colors)
+        neighbors = list(self.__graph[start_node].items())
+        min_path_length_in_meters = self.__INF
+        best_path = []
+        for node_1, edge_1 in neighbors:
+            for node_2, edge_2 in neighbors:
+                if node_1 != node_2:
+                    self.__make_restore_path_matrix(node_1, restore_path_matrix, start_node, start_node)
+                    path = self.get_shortest_path(node_1, node_2, restore_path_matrix)
+                    if len(path) > 0:
+                        edge = self.__graph[node_2][start_node]
+                        path_length_in_meters = self.get_path_length_in_edges(path) + self.__edges_length[edge]
+                        if path_length_in_meters < min_path_length_in_meters:
+                            path.append(edge)
+                            best_path = path
+                            min_path_length_in_meters = path_length_in_meters
+        return best_path, start_node
+
+    def __find_way_back(self):
+        restore_path_matrix = {}
+        for i, to_node in enumerate(self.__poisson_generators_to_nodes):
+            best_path, start_node = self.__find_lightest_cycle(to_node, self.__poisson_generators_from_nodes[i])
+            print('\n', best_path, start_node)
+
+    def __make_restore_path_matrix(self, start_node, restore_path_matrix, prev_node=None, blocked_node=None):
         self.__network_logger.step_progress_bar()
         distances = {node: self.__INF for node in self.__clear_nodes}
         distances[start_node] = 0
@@ -92,7 +132,7 @@ class Net:
             neighbors = list(self.__graph[current_node].items())
             random.shuffle(neighbors)
             for neighbor_node, edge in neighbors:
-                if neighbor_node != prev_node:
+                if neighbor_node != prev_node and neighbor_node != blocked_node:
                     distance = current_distance + self.__edges_length[edge]
                     if distance < distances[neighbor_node]:
                         distances[neighbor_node] = distance
@@ -141,13 +181,18 @@ class Net:
     Сильно тормозит при edges кол-ве узлово около 10к. проблема?
     '''
 
-    def get_shortest_path(self, start_node, end_node):
-        previous_nodes = self.__restore_path_matrix[start_node]
+    def get_shortest_path(self, start_node, end_node, restore_path_matrix=None):
+        if restore_path_matrix is not None:
+            previous_nodes = restore_path_matrix[start_node]
+        else:
+            previous_nodes = self.__restore_path_matrix[start_node]
         path = []
         node = end_node
         while node != start_node:
             node_1 = node
             node_2 = previous_nodes[node_1]
+            if node_2 is None:
+                return []
             edge = self.__graph[node_2][node_1]
             node = node_2
             path.append(edge)

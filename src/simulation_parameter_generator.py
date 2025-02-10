@@ -18,12 +18,12 @@ def generate_intensities(n_generators: int, duration: int) -> list:
 """
 
 
-def is_there_cycle(prev_node: str, current_node: str, graph: dict[str, dict[str, str]], colors: dict[str, int]):
+def is_there_cycle(prev_node: str, current_node: str, graph: dict[str, dict[str, str]], colors: dict[str, int]) -> bool:
     colors[current_node] = 1
     neighbors = graph[current_node]
     for node, edge in neighbors.items():
         if node != prev_node:
-            if colors[node] == 0:
+            if colors[node] == 0: # магические числа!!!
                 return is_there_cycle(current_node, node, graph, colors)
             if colors[node] == 1:
                 return True
