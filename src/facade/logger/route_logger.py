@@ -1,11 +1,13 @@
-from facade.logger.logger import Logger
+from facade.logger.logger import Logger, Message
 from prettytable import PrettyTable
+from facade.structures import NodeData
+
 
 class RouteLogger(Logger):
     def __init__(self):
         super().__init__("[RouteInfo]")
 
-    def print_routes_data_info(self, message, target_nodes_data):
+    def print_routes_data_info(self, message: Message, target_nodes_data: list[NodeData]) -> None:
         number_of_displayed_target_nodes = 5
         first_column_size = 14
         second_column_size = 46

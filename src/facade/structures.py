@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import enum
 
 @dataclass
 class NodeData:
@@ -9,6 +10,7 @@ class NodeData:
     path_length_edges: list
     last_route_id: int
 
+
 @dataclass
 class SimulationParams:
     DURATION: int
@@ -16,3 +18,14 @@ class SimulationParams:
     ITERATIONS: int
     intensities: list
     poisson_generators_edges: list
+
+
+class NodeColor(enum.Enum):
+    white = 0
+    grey = 1
+    black = 2
+
+@dataclass
+class NodePair:
+    node_from: str
+    node_to: str

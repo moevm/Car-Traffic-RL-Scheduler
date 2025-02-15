@@ -5,6 +5,7 @@ import json
 from facade.net import Net
 from facade.logger.network_logger import NetworkLogger
 from facade.logger.logger import Message
+from facade.structures import NodeColor
 
 
 def generate_intensities(n_generators: int, duration: int) -> list:
@@ -18,16 +19,19 @@ def generate_intensities(n_generators: int, duration: int) -> list:
 """
 
 
-def is_there_cycle(prev_node: str, current_node: str, graph: dict[str, dict[str, str]], colors: dict[str, int]) -> bool:
-    colors[current_node] = 1
+def is_there_cycle(prev_node: str, current_node: str, graph: dict[str, dict[str, str]],
+                   colors: dict[str, NodeColor]) -> bool:
+    colors[current_node] = NodeColor.grey
     neighbors = graph[current_node]
     for node, edge in neighbors.items():
         if node != prev_node:
-            if colors[node] == 0: # магические числа!!!
-                return is_there_cycle(current_node, node, graph, colors)
-            if colors[node] == 1:
+            if colors[node] == NodeColor.white:
+                result = is_there_cycle(current_node, node, graph, colors)
+                if result:
+                    return result
+            if colors[node] == NodeColor.grey:
                 return True
-    colors[current_node] = 2
+    colors[current_node] = NodeColor.black
     return False
 
 
@@ -39,15 +43,18 @@ def generate_poisson_generators(sumo_config: str, n_generators: int) -> list:
     network_logger = NetworkLogger()
     network_logger.init_progress_bar(Message.search_for_valid_edges, n_generators)
     possible_edges = []
+    possible_nodes = set()
     graph = net.get_graph()
     clear_edges = net.get_clear_edges()
     clear_nodes = net.get_clear_nodes()
     random.shuffle(clear_edges)
-    colors = {node: 0 for node in clear_nodes}
     for i, edge in enumerate(clear_edges):
-        network_logger.step_progress_bar()
-        if is_there_cycle(traci.edge.getFromJunction(edge), traci.edge.getToJunction(edge), graph, colors):
+        colors = {node: NodeColor.white for node in clear_nodes}
+        if (is_there_cycle(traci.edge.getFromJunction(edge), traci.edge.getToJunction(edge), graph, colors) and
+                traci.edge.getToJunction(edge) not in possible_nodes):
             possible_edges.append(edge)
+            possible_nodes.add(traci.edge.getToJunction(edge))
+            network_logger.step_progress_bar()
         if len(possible_edges) == n_generators:
             break
     network_logger.destroy_progress_bar()
@@ -82,7 +89,7 @@ def main(duration: int, iterations: int, generators: int, file: str, init_delay,
     data = {"DURATION": duration, "INIT_DELAY": init_delay, "ITERATIONS": iterations,
             "intensities": intensities, "poisson_generators_edges": poisson_generators}
     with open(file, 'w') as json_file:
-        json.dump(data, json_file)
+        json.dump(data, json_file, indent=4)
 
 
 if __name__ == "__main__":
