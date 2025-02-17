@@ -25,7 +25,8 @@ class Facade:
         self.__last_target_nodes_data = []
         self.__traffic_control = TrafficControl(self.__simulation_params.intensities,
                                                 self.__simulation_params.poisson_generators_edges,
-                                                self.__simulation_params.DURATION, self.__net.get_clear_edges())
+                                                self.__simulation_params.DURATION, self.__net.get_clear_edges(),
+                                                self.__simulation_params.PART_OF_THE_PATH)
         self.__step = 0
 
     def __get_simulation_params_from_file(self) -> SimulationParams:
@@ -47,7 +48,8 @@ class Facade:
         while self.__step < self.__simulation_params.DURATION:
             traci.simulationStep()
             self.__step += 1
-            if self.__step % 100 == 0 and self.__traffic_control.have_vehicles_passed_halfway_in_total():
+            if (self.__step % self.__simulation_params.CHECK_TIME == 0 and
+                    self.__traffic_control.have_vehicles_passed_part_of_path_in_total()):
                 break
 
     def __generate_main_traffic(self) -> None:
@@ -58,7 +60,7 @@ class Facade:
                 self.__route_generator.make_routes(schedule[self.__step])
                 self.__last_target_nodes_data = self.__route_generator.get_last_target_nodes_data()
                 self.__transport_generator.generate(self.__last_target_nodes_data)
-                #self.__route_generator.print_all_routes_data_info()
+                # self.__route_generator.print_all_routes_data_info()
             self.__step += 1
 
     def execute(self) -> None:

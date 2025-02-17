@@ -79,15 +79,23 @@ def generate_poisson_generators(sumo_config: str, n_generators: int) -> list:
               help='path to simulation parameters config file (.sumocfg).')
 @click.option('--init-delay', '-n', type=int, default=10, help='delay between vehicle departures during map '
                                                                'initialization by traffic.')
+@click.option('--part-of-the-path', '-p', type=float, default=0.5, help='the total part of the path that the '
+                                                                      'initializing traffic must travel for generation '
+                                                                      'to begin using Poisson flows.')
+@click.option('--check-time', '-t', type=int, default=100, help='check time (in simulation ticks) whether '
+                                                                'the traffic has traveled half of the total path in'
+                                                                'meters.')
 @click.argument('sumo_config', nargs=1, type=str)
-def main(duration: int, iterations: int, generators: int, file: str, init_delay, sumo_config: str) -> None:
+def main(duration: int, iterations: int, generators: int, file: str, init_delay, part_of_the_path, check_time,
+         sumo_config: str) -> None:
     """
     This program generates a config with parameters for simulation.
     """
     intensities = generate_intensities(generators, duration)
     poisson_generators = generate_poisson_generators(sumo_config, generators)
     data = {"DURATION": duration, "INIT_DELAY": init_delay, "ITERATIONS": iterations,
-            "intensities": intensities, "poisson_generators_edges": poisson_generators}
+            "PART_OF_THE_PATH": part_of_the_path, "CHECK_TIME": check_time, "intensities": intensities,
+            "poisson_generators_edges": poisson_generators}
     with open(file, 'w') as json_file:
         json.dump(data, json_file, indent=4)
 

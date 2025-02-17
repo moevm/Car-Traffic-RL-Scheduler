@@ -16,6 +16,8 @@ class SimulationParams:
     DURATION: int
     INIT_DELAY: int
     ITERATIONS: int
+    PART_OF_THE_PATH: float
+    CHECK_TIME: int
     intensities: list
     poisson_generators_edges: list
 

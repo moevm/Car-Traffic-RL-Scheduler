@@ -1,14 +1,14 @@
 import random
-
 import traci
 
 
 class TrafficControl:
-    def __init__(self, intensities, generators_edges, duration, clear_edges):
+    def __init__(self, intensities, generators_edges, duration, clear_edges, part_of_path):
         self.__intensities = intensities
         self.__generators_edges = generators_edges
         self.__duration = duration
         self.__edges = clear_edges
+        self.__part_of_path = part_of_path
         self.__vehicles_data = []
 
     def init_vehicles_data(self, vehicles_data):
@@ -33,7 +33,7 @@ class TrafficControl:
                     schedule[timestamp] = [edge]
         return schedule
 
-    def have_vehicles_passed_halfway_in_total(self):
+    def have_vehicles_passed_part_of_path_in_total(self):
         vehicles = traci.vehicle.getIDList()
         sum_full_distances = 0
         sum_current_distances = 0
@@ -41,7 +41,7 @@ class TrafficControl:
             sum_current_distances += traci.vehicle.getDistance(vehicle_id)
             sum_full_distances += self.__vehicles_data[vehicle_id]
         print(sum_current_distances / sum_full_distances)
-        if sum_current_distances >= sum_full_distances / 2:
+        if sum_current_distances >= sum_full_distances * self.__part_of_path:
             return True
         else:
             return False
