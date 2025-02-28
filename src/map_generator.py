@@ -126,7 +126,7 @@ def handle_args(argv_list: list) -> None:
         for key, value in netgenerate_cli.items():
             command += f"{str(key)} {str(value)} "
         net_name = f"{base_filename + str(i)}"
-        command += f"-o configs/{base_filename}-configs/{net_name}.net.xml"
+        command += f"--tls.guess true --tls.guess.threshold 0 -o configs/{base_filename}-configs/{net_name}.net.xml"
         print(command)
         os.system(command)
         make_sumocfg(net_name, base_filename)

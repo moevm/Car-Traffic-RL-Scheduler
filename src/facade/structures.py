@@ -18,8 +18,9 @@ class SimulationParams:
     ITERATIONS: int
     PART_OF_THE_PATH: float
     CHECK_TIME: int
-    intensities: list
-    poisson_generators_edges: list
+    intensities: list[float]
+    poisson_generators_edges: list[str]
+    turned_off_traffic_lights: list[str]
 
 
 class NodeColor(enum.Enum):

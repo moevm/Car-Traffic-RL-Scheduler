@@ -1,4 +1,5 @@
 import traci
+from sumolib.net import readNet
 import heapq
 import random
 from multiprocessing import Process, Manager, Lock
@@ -7,16 +8,17 @@ from facade.logger.network_logger import *
 
 
 class Net:
-    def __init__(self):
+    def __init__(self, net_config):
+        self.__NET_CONFIG = net_config
+        self.__sumolib_net = readNet(net_config)
         self.__network_logger = NetworkLogger()
         self.__INF = float("inf")
-        self.__nodes = traci.junction.getIDList()
-        self.__edges = traci.edge.getIDList()
-        self.__clear_nodes = self.__find_clear_nodes()
-        self.__clear_edges = self.__find_clear_edges()
-        self.__edges_length = {edge: traci.lane.getLength(f"{edge}_0") for edge in self.__clear_edges}
+        self.__nodes = [node.getID() for node in self.__sumolib_net.getNodes()]
+        self.__edges = [edge.getID() for edge in self.__sumolib_net.getEdges(withInternal=False)]
+        self.__edges_length = {edge.getID(): edge.getLength() for edge in self.__sumolib_net.getEdges(
+            withInternal=False)}
         self.__extreme_nodes = self.__find_extreme_nodes()
-        self.__network_logger.print_graph_info(len(self.__clear_edges), len(self.__clear_nodes))
+        self.__network_logger.print_graph_info(len(self.__edges), len(self.__nodes))
         self.__graph = self.__make_graph()
         (self.__poisson_generators_to_nodes, self.__poisson_generators_from_nodes, self.__poisson_generators_edges,
          self.__paths_for_cyclic_routes) = [], [], [], {}
@@ -24,9 +26,15 @@ class Net:
         self.__edges_dict = self.__make_edges_dict()
 
     def init_poisson_generators(self, poisson_generators_edges: list[str]) -> None:
-        self.__poisson_generators_to_nodes = [traci.edge.getToJunction(edge) for edge in poisson_generators_edges]
-        self.__poisson_generators_from_nodes = [traci.edge.getFromJunction(edge) for edge in poisson_generators_edges]
+        self.__poisson_generators_to_nodes = [self.__sumolib_net.getEdge(edge).getToNode().getID() for edge in
+                                              poisson_generators_edges]
+        self.__poisson_generators_from_nodes = [self.__sumolib_net.getEdge(edge).getFromNode().getID() for edge in
+                                                poisson_generators_edges]
         self.__poisson_generators_edges = poisson_generators_edges
+
+    def turn_off_traffic_lights(self, turned_off_traffic_lights):
+        for traffic_light_id in turned_off_traffic_lights:
+            traci.trafficlight.setProgram(traffic_light_id, "off")
 
     def parallel_make_restore_path_matrix(self) -> None:
         start_nodes = self.__extreme_nodes + self.__poisson_generators_to_nodes
@@ -65,7 +73,7 @@ class Net:
         colors[current_node] = NodeColor.black
 
     def __find_lightest_cycle(self, to_node: str, from_node: str) -> list[str]:
-        colors = {node: NodeColor.white for node in self.__clear_nodes}
+        colors = {node: NodeColor.white for node in self.__nodes}
         start_node_of_cycle = self.__find_cycle(from_node, to_node, colors)
         neighbors = list(self.__graph[start_node_of_cycle].items())
         min_path_length_in_meters = self.__INF
@@ -142,8 +150,9 @@ class Net:
 
     def __make_edges_dict(self) -> dict[str, NodePair]:
         edges_dict = {}
-        for edge in self.__clear_edges:
-            node_pair = NodePair(node_from=traci.edge.getFromJunction(edge), node_to=traci.edge.getToJunction(edge))
+        for edge in self.__edges:
+            node_pair = NodePair(node_from=self.__sumolib_net.getEdge(edge).getFromNode().getID(),
+                                 node_to=self.__sumolib_net.getEdge(edge).getToNode().getID())
             edges_dict[edge] = node_pair
         return edges_dict
 
@@ -152,10 +161,10 @@ class Net:
         # self.__network_logger.step_progress_bar()
         if start_node in restore_path_matrix:
             return
-        distances = {node: self.__INF for node in self.__clear_nodes}
+        distances = {node: self.__INF for node in self.__nodes}
         distances[start_node] = 0
         priority_queue = [(0, start_node, prev_node)]
-        previous_nodes = {node: None for node in self.__clear_nodes}
+        previous_nodes = {node: None for node in self.__nodes}
         while priority_queue:
             current_distance, current_node, prev_node = heapq.heappop(priority_queue)
             if current_distance > distances[current_node]:
@@ -173,11 +182,11 @@ class Net:
 
     def __make_graph(self) -> dict[str, dict[str, str]]:
         graph = {}
-        self.__network_logger.init_progress_bar(Message.init_incidence_matrix, len(self.__clear_edges))
-        for edge in self.__clear_edges:
+        self.__network_logger.init_progress_bar(Message.init_incidence_matrix, len(self.__edges))
+        for edge in self.__edges:
             self.__network_logger.step_progress_bar()
-            node_1 = traci.edge.getFromJunction(edge)
-            node_2 = traci.edge.getToJunction(edge)
+            node_1 = self.__sumolib_net.getEdge(edge).getFromNode().getID()
+            node_2 = self.__sumolib_net.getEdge(edge).getToNode().getID()
             if node_1 in graph:
                 graph[node_1][node_2] = edge
             else:
@@ -201,11 +210,10 @@ class Net:
         return clear_nodes
 
     def __find_extreme_nodes(self) -> list[str]:
-        nodes = self.get_clear_nodes()
         extreme_nodes = []
-        for node in nodes:
-            if len(traci.junction.getOutgoingEdges(node)) == 2:
-                extreme_nodes.append(node)
+        for node in self.__sumolib_net.getNodes():
+            if len(node.getOutgoing()) == 1:
+                extreme_nodes.append(node.getID())
         return extreme_nodes
 
     def get_shortest_path(self, start_node: str, end_node: str, restore_path_matrix=None) -> list[str]:
@@ -241,11 +249,11 @@ class Net:
     def get_extreme_nodes(self) -> list[str]:
         return self.__extreme_nodes
 
-    def get_clear_nodes(self) -> list[str]:
-        return self.__clear_nodes
+    def get_nodes(self) -> list[str]:
+        return self.__nodes
 
-    def get_clear_edges(self) -> list[str]:
-        return self.__clear_edges
+    def get_edges(self) -> list[str]:
+        return self.__edges
 
     def get_poisson_generators_edges(self) -> list[str]:
         return self.__poisson_generators_edges
@@ -264,3 +272,6 @@ class Net:
 
     def get_path_length_in_edges(self, path: list[str]) -> int:
         return len(path)
+
+    def get_sumolib_net(self):
+        return self.__sumolib_net

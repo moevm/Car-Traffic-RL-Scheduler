@@ -12,7 +12,7 @@ class RouteGenerator:
         self.__last_n_routes = 0
         self.__net = net
         self.__extreme_nodes = self.__net.get_extreme_nodes()
-        self.__target_nodes = self.__net.get_clear_nodes()
+        self.__target_nodes = self.__net.get_nodes()
         self.__poisson_generators_edges = self.__net.get_poisson_generators_edges()
         self.__poisson_generators_from_nodes = self.__net.get_poisson_generators_from_nodes()
         self.__poisson_generators_to_nodes = self.__net.get_poisson_generators_to_nodes()
