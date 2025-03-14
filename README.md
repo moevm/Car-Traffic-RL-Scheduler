@@ -116,10 +116,15 @@ pip install -r ../requirements.txt
 ```bash
 python3 mapGenerator.py -r --number-networks 5 --rand.iterations-low 500 --rand.iterations-high 1000 --rand.max-distance-low 200 --rand.max-distance-high 400 --rand.min-distance-low 50 --rand.min-distance-high 150 --rand.min-angle-low 30 --rand.min-angle-high 60 --rand.neighbor-dist5-low 5 --rand.neighbor-dist5-high 10
 ```
-9. Запуск генерации приложения:
+
+9. Если конфигурационный файл симуляции уже создан, то данный шаг следует опустить. В ином случае следует создать конфигурационный файл (CLI справку скрипта можно получить с помощью --help):
 ```bash
-python3 main.py configs/rand-configs/rand3.sumocfg
+python3 -d 10000 -i 5 -g 0.2 -f ./configs/simulation-parameters/simulation_parameters_1.json -p 0.3 -t 50 -l 0.3 -e 200 ./configs/rand-configs/rand3.sumocfg 
+``` 
+10. Запуск генерации приложения:
+```bash
+python3 main.py -s configs/rand-configs/rand3.sumocfg -p configs/simulation-parameters/simulation_parameters_1.json
 ```
-10. Перед Вами откроется sumo-gui. Загрузка карты может занять время. После загрузки карты установите Delay в значение 100 ms и нажмите на зелёный треугольник. В терминале можно наблюдать за логами.
+11.  Перед Вами откроется sumo-gui. Загрузка карты может занять время. После загрузки карты установите Delay в значение 100 ms и нажмите на зелёный треугольник. В терминале можно наблюдать за логами.
 
 [gif]
