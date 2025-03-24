@@ -1,6 +1,7 @@
 import click
 from facade.facade import Facade
 
+
 @click.command()
 @click.option('--sumo-config', '-s', type=str, help='path to SUMO config file (.sumocfg)')
 @click.option('--simulation-parameters', '-p', type=str, help='path to config with parameters of '
@@ -11,5 +12,7 @@ def main(sumo_config: str, simulation_parameters: str) -> None:
     """
     facade = Facade(sumo_config, simulation_parameters)
     facade.execute()
+
+
 if __name__ == "__main__":
     main()

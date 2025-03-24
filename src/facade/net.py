@@ -24,6 +24,7 @@ class Net:
          self.__paths_for_cyclic_routes) = [], [], [], {}
         self.__restore_path_matrix, self.__restore_path_matrix_for_cycles = {}, {}
         self.__edges_dict = self.__make_edges_dict()
+        self.__turned_on_traffic_lights_ids = []
 
     def init_poisson_generators(self, poisson_generators_edges: list[str]) -> None:
         self.__poisson_generators_to_nodes = [self.__sumolib_net.getEdge(edge).getToNode().getID() for edge in
@@ -33,8 +34,16 @@ class Net:
         self.__poisson_generators_edges = poisson_generators_edges
 
     def turn_off_traffic_lights(self, turned_off_traffic_lights):
-        for traffic_light_id in turned_off_traffic_lights:
-            traci.trafficlight.setProgram(traffic_light_id, "off")
+        for off_traffic_light_id in turned_off_traffic_lights:
+            traci.trafficlight.setProgram(off_traffic_light_id, "off")
+        for traffic_light_id in traci.trafficlight.getIDList():
+            is_on_traffic_light = True
+            for off_traffic_light_id in turned_off_traffic_lights:
+                if traffic_light_id == off_traffic_light_id:
+                    is_on_traffic_light = False
+                    break
+            if is_on_traffic_light:
+                self.__turned_on_traffic_lights_ids.append(traffic_light_id)
 
     def parallel_make_restore_path_matrix(self) -> None:
         start_nodes = self.__extreme_nodes + self.__poisson_generators_to_nodes
@@ -275,3 +284,6 @@ class Net:
 
     def get_sumolib_net(self):
         return self.__sumolib_net
+
+    def get_turned_on_traffic_lights_ids(self):
+        return self.__turned_on_traffic_lights_ids

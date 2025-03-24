@@ -82,8 +82,6 @@ class RouteGenerator:
                     filtered_target_node_data.start_nodes_ids.append(target_node_data.start_nodes_ids[i])
         return filtered_target_node_data
 
-    """9932"""
-
     def __set_start_node_from_poisson_generators(self, start_nodes: list[str], target_node_data: NodeData) -> str:
         filtered_target_node_data = self.__get_filtered_target_node_data(target_node_data, start_nodes)
         min_path_length_meters_counter, path_length_meters_counter = self.__find_min_path_length_meters_counter(

@@ -2,6 +2,7 @@ import random
 import traci
 from facade.structures import NodeData
 
+
 class TransportGenerator:
     def __init__(self):
         self.__vehicles_data = {}
@@ -14,6 +15,13 @@ class TransportGenerator:
             traci.vehicle.add(route_id, route_id)
             traci.vehicle.setColor(route_id, self.__generate_color())
             self.__vehicles_data[str(route_id)] = last_target_node_data.path_length_meters[-1]
+
+    def clean_vehicles_data(self):
+        new_vehicles_data = {}
+        for vehicle_id in self.__vehicles_data.keys():
+            if vehicle_id in traci.vehicle.getIDList():
+                new_vehicles_data[vehicle_id] = self.__vehicles_data[vehicle_id]
+        self.__vehicles_data = new_vehicles_data
 
     def __generate_color(self) -> (int, int, int):
         r = random.randint(0, 255)

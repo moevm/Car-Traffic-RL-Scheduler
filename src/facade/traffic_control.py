@@ -11,10 +11,10 @@ class TrafficControl:
         self.__part_of_path = part_of_path
         self.__vehicles_data = []
 
-    def init_vehicles_data(self, vehicles_data):
+    def init_vehicles_data(self, vehicles_data) -> None:
         self.__vehicles_data = vehicles_data
 
-    def generate_schedule_for_poisson_flow(self, start_time):
+    def generate_schedule_for_poisson_flow(self, start_time) -> dict[int, list[str]]:
         data = {}
         for i, edge in enumerate(self.__generators_edges):
             prev_timestamp = start_time
@@ -33,7 +33,7 @@ class TrafficControl:
                     schedule[timestamp] = [edge]
         return schedule
 
-    def have_vehicles_passed_part_of_path_in_total(self):
+    def have_vehicles_passed_part_of_path_in_total(self) -> bool:
         vehicles = traci.vehicle.getIDList()
         sum_full_distances = 0
         sum_current_distances = 0
