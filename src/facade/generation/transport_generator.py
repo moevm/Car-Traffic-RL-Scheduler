@@ -1,5 +1,6 @@
 import random
 import traci
+
 from facade.structures import NodeData
 
 
@@ -9,21 +10,20 @@ class TransportGenerator:
 
     def generate(self, last_target_nodes_data: list[NodeData]) -> None:
         for last_target_node_data in last_target_nodes_data:
-            route_id = last_target_node_data.last_route_id
-            path = last_target_node_data.last_path
-            traci.route.add(route_id, path)
-            traci.vehicle.add(route_id, route_id)
-            traci.vehicle.setColor(route_id, self.__generate_color())
-            self.__vehicles_data[str(route_id)] = last_target_node_data.path_length_meters[-1]
+            routes_ids = last_target_node_data.last_routes_ids
+            paths = last_target_node_data.last_paths
+            for i in range(len(paths)):
+                traci.route.add(routes_ids[i], paths[i])
+                traci.vehicle.add(routes_ids[i], routes_ids[i])
+                traci.vehicle.setColor(routes_ids[i], self.__generate_color())
+                self.__vehicles_data[str(routes_ids[i])] = last_target_node_data.path_length_meters[-1]
 
     def clean_vehicles_data(self):
-        new_vehicles_data = {}
-        for vehicle_id in self.__vehicles_data.keys():
-            if vehicle_id in traci.vehicle.getIDList():
-                new_vehicles_data[vehicle_id] = self.__vehicles_data[vehicle_id]
-        self.__vehicles_data = new_vehicles_data
+        for arrived_vehicle_id in traci.simulation.getArrivedIDList():
+            del self.__vehicles_data[arrived_vehicle_id]
 
-    def __generate_color(self) -> (int, int, int):
+    @staticmethod
+    def __generate_color() -> (int, int, int):
         r = random.randint(0, 255)
         g = random.randint(0, 255)
         b = random.randint(0, 255)

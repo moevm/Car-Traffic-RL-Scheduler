@@ -1,15 +1,17 @@
-from dataclasses import dataclass
 import enum
+
+from dataclasses import dataclass, field
+
 
 @dataclass
 class NodeData:
-    node_id: str
-    last_path: list
-    start_nodes_ids: list
-    path_length_meters: list
-    path_length_edges: list
-    last_route_id: int
-
+    node_id: str = ""
+    last_paths: list = field(default_factory=list[list[str]])
+    start_nodes_ids: list = field(default_factory=list[str])
+    path_length_meters: list = field(default_factory=list[float])
+    path_length_edges: list = field(default_factory=list[int])
+    last_routes_ids: list = field(default_factory=list[list[str]])
+    start_nodes_ids_counter: dict = field(default_factory=dict[str, int])
 
 @dataclass
 class SimulationParams:
@@ -27,6 +29,7 @@ class NodeColor(enum.Enum):
     white = 0
     grey = 1
     black = 2
+
 
 @dataclass
 class NodePair:

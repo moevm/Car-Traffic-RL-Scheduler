@@ -1,20 +1,20 @@
-from typing import Any, SupportsFloat
-
 import gymnasium as gym
 import sumolib
 import traci
-from gymnasium.core import ObsType, ActType
-from gymnasium.spaces import Dict, Box, MultiDiscrete
 import numpy as np
 
+from typing import Any, SupportsFloat
+from gymnasium.core import ObsType, ActType
+from gymnasium.spaces import Dict, Box, MultiDiscrete
 from facade.generation.route_generator import RouteGenerator
 from facade.generation.transport_generator import TransportGenerator
 
 
 class TrafficLightsEnv(gym.Env):
     def __init__(self, traffic_lights_ids: list[str], schedule: dict[int, list[str]],
-                 route_generator: RouteGenerator, transport_generator: TransportGenerator, step):
-        print()
+                 route_generator: RouteGenerator, transport_generator: TransportGenerator, step, unique_phases):
+        print(len(unique_phases))
+        self.__unique_phases = unique_phases
         self.__schedule = schedule
         self.__route_generator = route_generator
         self.__transport_generator = transport_generator
@@ -22,32 +22,28 @@ class TrafficLightsEnv(gym.Env):
         self.traffic_lights_ids = traffic_lights_ids
         self.n_traffic_lights = len(self.traffic_lights_ids)
         self.observation_space = Dict({
-            "speed": Box(low=0, high=100, shape=(self.n_traffic_lights,), dtype=np.float32),
-            "count": Box(low=0, high=500, shape=(self.n_traffic_lights,), dtype=np.float32),
-            "density": Box(low=0, high=100, shape=(self.n_traffic_lights,), dtype=np.float32),
-            "phase": MultiDiscrete([8] * self.n_traffic_lights)
+            "density": Box(low=0, high=500, shape=(self.n_traffic_lights,), dtype=np.float32),
+            "waiting": Box(low=0, high=500, shape=(self.n_traffic_lights,), dtype=np.float32),
+            "phase": MultiDiscrete([len(unique_phases)] * self.n_traffic_lights) # ???
         })
-        self.action_space = Box(low=2, high=120, shape=(self.n_traffic_lights,), dtype=np.float32)
+        self.action_space = Box(low=-1, high=1, shape=(self.n_traffic_lights,), dtype=np.float32)
         self.local_step = 0
 
     def __get_observation(self):
-        speeds = np.zeros(shape=(self.n_traffic_lights,), dtype=np.float32)
-        counts = np.zeros(shape=(self.n_traffic_lights,), dtype=np.int32)
+        waitings = np.zeros(shape=(self.n_traffic_lights,), dtype=np.float32)
         densities = np.zeros(shape=(self.n_traffic_lights,), dtype=np.float32)
         phases = np.zeros(shape=(self.n_traffic_lights,), dtype=np.int8)
         for i, tls_id in enumerate(self.traffic_lights_ids):
             lanes = set(traci.trafficlight.getControlledLanes(tls_id))
-            speeds[i] = np.mean([traci.lane.getLastStepMeanSpeed(lane) for lane in lanes], dtype=np.float32)
-            counts[i] = np.mean([traci.lane.getLastStepVehicleNumber(lane) for lane in lanes], dtype=np.float32)
-            densities[i] = np.mean([traci.lane.getLastStepOccupancy(lane) for lane in lanes], dtype=np.float32)
-            phases[i] = traci.trafficlight.getPhase(tls_id)
+            waitings[i] = np.mean([traci.lane.getLastStepHaltingNumber(lane) for lane in lanes],dtype=np.float32)
+            densities[i] = np.mean([traci.lane.getLastStepVehicleNumber(lane)/traci.lane.getLength(lane)
+                                    for lane in lanes], dtype=np.float32)
+            phases[i] = self.__unique_phases[traci.trafficlight.getRedYellowGreenState(tls_id)]
         observation = {
-            "speed": speeds,
-            "count": counts,
             "density": densities,
+            "waiting": waitings,
             "phase": phases
         }
-
         return observation
 
     @staticmethod
@@ -70,6 +66,7 @@ class TrafficLightsEnv(gym.Env):
 
     @staticmethod
     def __change_phase_duration(tls_id, new_duration):
+        new_duration = 59 * new_duration + 61 # rescale
         current_logic = traci.trafficlight.getAllProgramLogics(tls_id)[0]
         current_phase = traci.trafficlight.getPhase(tls_id)
         new_phases = []
@@ -90,8 +87,6 @@ class TrafficLightsEnv(gym.Env):
     def step(
             self, action: ActType
     ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
-        traci.simulationStep()
-        self.local_step += 1
         if self.__global_step in self.__schedule:
             self.__route_generator.make_routes(self.__schedule[self.__global_step])
             last_target_nodes_data = self.__route_generator.get_last_target_nodes_data()
@@ -105,5 +100,8 @@ class TrafficLightsEnv(gym.Env):
             lanes = set(traci.trafficlight.getControlledLanes(tls_id))
             reward += -np.mean([traci.lane.getLastStepHaltingNumber(lane) for lane in lanes])
         truncated = self.local_step >= 50
+        traci.simulationStep()
+        self.local_step += 1
         self.__global_step += 1
+        self.__transport_generator.clean_vehicles_data()
         return observation, reward, False, truncated, info

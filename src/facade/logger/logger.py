@@ -1,6 +1,7 @@
+import enum
+
 from abc import ABC, abstractmethod
 from progress.bar import Bar
-import enum
 
 
 class Message(enum.Enum):
@@ -11,7 +12,7 @@ class Message(enum.Enum):
     search_for_valid_edges = "Search for valid edges:"
     find_way_back_paths = "Search for return paths:"
     init_restore_path_matrix_for_cycles = "Construction of restore-path matrix for start nodes of cycles..."
-
+    find_all_routes = "Finding all routes from extreme and poisson generators nodes..."
 
 class Logger(ABC):
     def __init__(self, logger_type: str):

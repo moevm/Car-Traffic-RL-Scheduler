@@ -8,7 +8,7 @@ from facade.structures import NodeColor
 
 
 def generate_intensities(n_generators: int, duration: int) -> list:
-    intensities = [random.uniform(1 / duration, 0.5) for i in range(n_generators)]
+    intensities = [random.uniform(1 / duration, 0.1) for i in range(n_generators)]
     return intensities
 
 
@@ -44,7 +44,7 @@ def extract_net_config(sumo_config):
 def generate_poisson_generators(part_generators: float, net: Net) -> list:
     sumolib_net = net.get_sumolib_net()
     possible_edges = []
-    possible_nodes = set()
+    possible_nodes = set() # суть в том что нельзя доб
     graph = net.get_graph()
     edges = net.get_edges()
     nodes = net.get_nodes()
@@ -89,8 +89,8 @@ def make_list_of_turned_off_traffic_lights(part_off_traffic_lights: float, net: 
 
 
 @click.command()
-@click.option('--duration', '-d', type=int, default=3600, help='simulation duration in steps.')
-@click.option('--iterations', '-i', type=int, default=1, help='number '
+@click.option('--duration', '-d', type=int, default=50000, help='simulation duration in steps.')
+@click.option('--iterations', '-i', type=int, default=10, help='number '
                                                               'of iterations of initial traffic generation.')
 @click.option('--part-generators', '-g', type=float, default=0.1, help='this part of the edges will act '
                                                                        'as flow generators.')
@@ -120,7 +120,6 @@ def main(duration: int, iterations: int, part_generators: float, file: str, init
     poisson_generators = generate_poisson_generators(part_generators, net)
     intensities = generate_intensities(len(poisson_generators), duration)
     turned_off_traffic_lights = make_list_of_turned_off_traffic_lights(part_off_traffic_lights, net)
-    print(turned_off_traffic_lights)
     data = {"DURATION": duration, "INIT_DELAY": init_delay, "ITERATIONS": iterations,
             "PART_OF_THE_PATH": part_of_the_path, "CHECK_TIME": check_time, "intensities": intensities,
             "poisson_generators_edges": poisson_generators, "turned_off_traffic_lights": turned_off_traffic_lights}

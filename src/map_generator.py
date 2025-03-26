@@ -2,23 +2,28 @@ import sys
 import random
 import os
 import json
-from sys import argv
 import xml.etree.ElementTree as ET
+
+from sys import argv
+
 
 def get_grid_cli() -> dict:
     with open("base-cli-params/grid-config.json", "r") as file:
         base_cli = json.load(file)
     return base_cli
 
+
 def get_spider_cli() -> dict:
     with open("base-cli-params/spider-config.json", "r") as file:
         base_cli = json.load(file)
     return base_cli
 
+
 def get_random_cli() -> dict:
     with open("base-cli-params/rand-config.json", "r") as file:
         base_cli = json.load(file)
     return base_cli
+
 
 def get_netgenerate_cli(cli: dict) -> dict:
     netgenerate_cli = {}
@@ -49,6 +54,7 @@ def init_cli(argv_list: list) -> dict:
                 break
     return base_cli
 
+
 def substitute_args(base_cli: dict, cli: dict, argv_list: list) -> None:
     for i in range(len(argv_list)):
         if argv_list[i] == "--number-networks":
@@ -59,7 +65,7 @@ def substitute_args(base_cli: dict, cli: dict, argv_list: list) -> None:
         elif "-" in argv_list[i]:
             pos = argv_list[i].rfind("-")
             main_key = argv_list[i][:pos]
-            sub_key = argv_list[i][pos+1:]
+            sub_key = argv_list[i][pos + 1:]
             if sub_key not in ["low", "high"]:
                 print("Error: invalid arg value.")
                 sys.exit()
@@ -75,6 +81,7 @@ def substitute_args(base_cli: dict, cli: dict, argv_list: list) -> None:
                 sys.exit()
     return
 
+
 def assign_grid_attach_params(base_cli: dict, netgenerate_cli: dict) -> None:
     grid_params_dict = {}
     grid_params = ["--grid.x-length", "--grid.y-length", "--grid.length"]
@@ -88,14 +95,16 @@ def assign_grid_attach_params(base_cli: dict, netgenerate_cli: dict) -> None:
         netgenerate_cli[param[:pos] + "attach-length"] = grid_params_dict[param]
     return
 
+
 def assign_spider_attach_params(base_cli: dict, netgenerate_cli: dict) -> None:
     param = "--spider.space-radius"
     spider_attach_dict = {param: (base_cli[param]["low"] +
-                                                    base_cli[param]["high"]) / 2}
+                                  base_cli[param]["high"]) / 2}
     if param in netgenerate_cli.keys():
         spider_attach_dict[param] = netgenerate_cli[param]
     netgenerate_cli["--spider.attach-length"] = spider_attach_dict[param]
     return
+
 
 def make_sumocfg(net_name, base_filename):
     configuration = ET.Element("configuration")
@@ -103,6 +112,7 @@ def make_sumocfg(net_name, base_filename):
     ET.SubElement(input_element, "net-file", value=f"{net_name}.net.xml")
     tree = ET.ElementTree(configuration)
     tree.write(f"configs/{base_filename}-configs/{net_name}.sumocfg")
+
 
 def handle_args(argv_list: list) -> None:
     base_cli = init_cli(argv_list)
@@ -130,6 +140,7 @@ def handle_args(argv_list: list) -> None:
         print(command)
         os.system(command)
         make_sumocfg(net_name, base_filename)
+
 
 if __name__ == "__main__":
     handle_args(argv[1:])
