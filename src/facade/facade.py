@@ -18,8 +18,7 @@ class Facade:
         self.__NET_CONFIG = self.__extract_net_config()
         self.__simulation_parameters_file = simulation_parameters_file
         self.__simulation_params = self.__get_simulation_params_from_file()
-        self.__net = Net(self.__NET_CONFIG)
-        self.__net.init_poisson_generators(self.__simulation_params.poisson_generators_edges)
+        self.__net = Net(self.__NET_CONFIG, self.__simulation_params.poisson_generators_edges)
         self.__net.parallel_make_restore_path_matrix()
         self.__net.parallel_find_way_back()
         self.__net.parallel_find_routes()

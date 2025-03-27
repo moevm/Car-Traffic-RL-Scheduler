@@ -90,53 +90,15 @@ class RouteGenerator:
             else:
                 start_node = self.__set_start_node(start_nodes, target_node_data)
             if start_node != target_node_data.node_id:
-                index = start_nodes.index(start_node)
                 start_nodes.remove(start_node)
                 path = self.__net.get_shortest_path(start_node, target_node_data.node_id)
-                # if poisson_generators_edges is not None:
-                #     edge = poisson_generators_edges.pop(index)
-                #     path.insert(0, edge)
                 path_length_in_meters = self.__net.get_path_length_in_meters(path)
                 path_length_in_edges = self.__net.get_path_length_in_edges(path)
-                self.__add_target_node_data(j, start_node, path, path_length_in_meters, path_length_in_edges, self.__route_counter)
+                self.__add_target_node_data(j, start_node, path, path_length_in_meters, path_length_in_edges,
+                                            self.__route_counter)
                 self.__route_counter += 1
                 self.__last_indices.append(j)
                 i += 1
-        # chose_indices = random.sample(range(len(self.__target_nodes_data)), len(start_nodes))
-        # trunc_i = len(chose_indices)
-        # for global_i, i in enumerate(chose_indices):
-        #     tmp_start_nodes = start_nodes.copy()
-        #     if self.__target_nodes_data[i].node_id in tmp_start_nodes:
-        #         tmp_start_nodes.remove(self.__target_nodes_data[i].node_id)
-        #     if not tmp_start_nodes:
-        #         # print("FAIL!!!!!!!!!!!!!!!!!!!!!")
-        #         trunc_i = global_i
-        #         break
-        #     if poisson_generators_edges is None:
-        #         start_node = self.__set_start_node(tmp_start_nodes, self.__target_nodes_data[i],
-        #                                            'extreme_nodes')
-        #     else:
-        #         start_node = self.__set_start_node(tmp_start_nodes, self.__target_nodes_data[i],
-        #                                            'poisson_generators')
-        #     """
-        #     если set_start_node запускался в режиме для крайних узлов, то start_node может быть не в списке start_nodes,
-        #     так как этот start_node метод set_start_node может взять из структуры target_nodes_data после нахождения
-        #     минимума. таким образом, за раз может быть сгенерировано несколько автомобилей из одного ребра
-        #     """
-        #     if start_node in start_nodes:  #
-        #         index = start_nodes.index(start_node)
-        #         start_nodes.remove(start_node)
-        #     # print("route_generator", tmp_start_nodes, self.__target_nodes_data[i].start_nodes_ids, self.__target_nodes_data[i].node_id)
-        #     path = self.__net.get_shortest_path(start_node, self.__target_nodes_data[i].node_id)
-        #     if poisson_generators_edges is not None:
-        #         edge = poisson_generators_edges.pop(index)
-        #         path.insert(0, edge)
-        #     path_length_in_meters = self.__net.get_path_length_in_meters(path)
-        #     path_length_in_edges = self.__net.get_path_length_in_edges(path)
-        #     self.__add_target_node_data(i, start_node, path, path_length_in_meters, path_length_in_edges)
-        #     self.__route_counter += 1
-        #     self.__start_node_counter[start_node] += 1
-        # self.__last_indices = chose_indices[:trunc_i]
 
     def get_last_target_nodes_data(self) -> list[NodeData]:
         last_target_nodes_data = []

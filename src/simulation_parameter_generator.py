@@ -45,20 +45,17 @@ def generate_poisson_generators(part_generators: float, net: Net) -> list:
     sumolib_net = net.get_sumolib_net()
     possible_edges = []
     possible_nodes = set() # суть в том что нельзя доб
-    graph = net.get_graph()
     edges = net.get_edges()
-    nodes = net.get_nodes()
     network_logger = NetworkLogger()
     n_generators = int(part_generators * len(edges))
     network_logger.init_progress_bar(Message.search_for_valid_edges, n_generators)
     random.shuffle(edges)
-    for i, edge in enumerate(edges):
-        colors = {node: NodeColor.white for node in nodes}
-        if (is_there_cycle(sumolib_net.getEdge(edge).getFromNode().getID(),
-                           sumolib_net.getEdge(edge).getToNode().getID(), graph, colors) and
-                sumolib_net.getEdge(edge).getToNode().getID() not in possible_nodes):
-            possible_edges.append(edge)
+    for i, edge, in enumerate(edges):
+        to_node = sumolib_net.getEdge(edge).getToNode().getID()
+        if ((sumolib_net.getEdge(edge).getToNode().getID() not in possible_nodes)
+                and (len(sumolib_net.getNode(to_node).getOutgoing()) > 1)):
             possible_nodes.add(sumolib_net.getEdge(edge).getToNode().getID())
+            possible_edges.append(edge)
             network_logger.step_progress_bar()
         if len(possible_edges) == n_generators:
             break
@@ -92,7 +89,7 @@ def make_list_of_turned_off_traffic_lights(part_off_traffic_lights: float, net: 
 @click.option('--duration', '-d', type=int, default=50000, help='simulation duration in steps.')
 @click.option('--iterations', '-i', type=int, default=10, help='number '
                                                               'of iterations of initial traffic generation.')
-@click.option('--part-generators', '-g', type=float, default=0.1, help='this part of the edges will act '
+@click.option('--part-generators', '-g', type=float, default=0.5, help='this part of the edges will act '
                                                                        'as flow generators.')
 @click.option('--file', '-f', type=str, default='./configs/simulation-parameters/simulation_parameters.json',
               help='path to simulation parameters config file (.sumocfg).')
@@ -116,7 +113,7 @@ def main(duration: int, iterations: int, part_generators: float, file: str, init
     This program generates a config with parameters for simulation.
     """
     net_config = extract_net_config(sumo_config)
-    net = Net(net_config)
+    net = Net(net_config, [])
     poisson_generators = generate_poisson_generators(part_generators, net)
     intensities = generate_intensities(len(poisson_generators), duration)
     turned_off_traffic_lights = make_list_of_turned_off_traffic_lights(part_off_traffic_lights, net)
