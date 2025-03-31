@@ -13,6 +13,7 @@ class NodeData:
     last_routes_ids: list = field(default_factory=list[list[str]])
     start_nodes_ids_counter: dict = field(default_factory=dict[str, int])
 
+
 @dataclass
 class SimulationParams:
     DURATION: int
@@ -20,15 +21,10 @@ class SimulationParams:
     ITERATIONS: int
     PART_OF_THE_PATH: float
     CHECK_TIME: int
+    CPU_SCALE: int
     intensities: list[float]
     poisson_generators_edges: list[str]
     turned_off_traffic_lights: list[str]
-
-
-class NodeColor(enum.Enum):
-    white = 0
-    grey = 1
-    black = 2
 
 
 @dataclass

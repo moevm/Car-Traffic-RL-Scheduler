@@ -2,7 +2,6 @@ import random
 import traci
 
 from facade.structures import NodeData
-from copy import deepcopy
 from facade.logger.logger import Message
 from facade.logger.route_logger import RouteLogger
 from facade.net import Net
@@ -47,7 +46,6 @@ class RouteGenerator:
         filtered_target_node_data = self.__get_filtered_target_node_data(target_node_data, start_nodes)
         for start_node in start_nodes:
             if start_node not in filtered_target_node_data.start_nodes_ids_counter:
-                # print("A")
                 return start_node
         start_node = filtered_target_node_data.start_nodes_ids[0]
         min_start_nodes_ids_counter = min(filtered_target_node_data.start_nodes_ids_counter.items(),
@@ -55,7 +53,6 @@ class RouteGenerator:
         for i in range(len(filtered_target_node_data.start_nodes_ids)):
             if filtered_target_node_data.start_nodes_ids[i] == min_start_nodes_ids_counter:
                 start_node = filtered_target_node_data.start_nodes_ids[i]
-                # print("B")
                 break
         return start_node
 

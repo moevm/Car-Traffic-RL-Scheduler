@@ -1,37 +1,15 @@
 import click
 import random
 import json
+
 from facade.net import Net
 from facade.logger.network_logger import NetworkLogger
 from facade.logger.logger import Message
-from facade.structures import NodeColor
 
 
 def generate_intensities(n_generators: int, duration: int) -> list:
-    intensities = [random.uniform(1 / duration, 0.1) for i in range(n_generators)]
+    intensities = [random.uniform(1 / duration, 0.1) for _ in range(n_generators)]
     return intensities
-
-
-"""
-выбираем только те рёбра-генраторы, из которых достижима любая точка в графе. недостижимость связана с тем, что
-нельзя делать лупбэк по одному и тому же ребру
-"""
-
-
-def is_there_cycle(prev_node: str, current_node: str, graph: dict[str, dict[str, str]],
-                   colors: dict[str, NodeColor]) -> bool:
-    colors[current_node] = NodeColor.grey
-    neighbors = graph[current_node]
-    for node, edge in neighbors.items():
-        if node != prev_node:
-            if colors[node] == NodeColor.white:
-                result = is_there_cycle(current_node, node, graph, colors)
-                if result:
-                    return result
-            if colors[node] == NodeColor.grey:
-                return True
-    colors[current_node] = NodeColor.black
-    return False
 
 
 def extract_net_config(sumo_config):
@@ -44,7 +22,7 @@ def extract_net_config(sumo_config):
 def generate_poisson_generators(part_generators: float, net: Net) -> list:
     sumolib_net = net.get_sumolib_net()
     possible_edges = []
-    possible_nodes = set() # суть в том что нельзя доб
+    possible_nodes = set()
     edges = net.get_edges()
     network_logger = NetworkLogger()
     n_generators = int(part_generators * len(edges))
@@ -61,9 +39,6 @@ def generate_poisson_generators(part_generators: float, net: Net) -> list:
             break
     network_logger.destroy_progress_bar()
     if n_generators > len(possible_edges):
-        """
-        рассмотреть что будет при 4 более полоске в одном направлении
-        """
         print(
             "Number of Poisson generators is greater than number of possible edges. The number of Poisson generators will be "
             "set equal to the number of possible edges in the graph.")
@@ -86,29 +61,33 @@ def make_list_of_turned_off_traffic_lights(part_off_traffic_lights: float, net: 
 
 
 @click.command()
-@click.option('--duration', '-d', type=int, default=50000, help='simulation duration in steps.')
-@click.option('--iterations', '-i', type=int, default=10, help='number '
-                                                              'of iterations of initial traffic generation.')
-@click.option('--part-generators', '-g', type=float, default=0.5, help='this part of the edges will act '
+@click.option('--duration', '-d', type=int, default=50000, help='Simulation duration in steps.')
+@click.option('--iterations', '-i', type=int, default=10, help='Number '
+                                                               'of iterations of initial traffic generation.')
+@click.option('--part-generators', '-g', type=float, default=0.5, help='This part of the edges will act '
                                                                        'as flow generators.')
 @click.option('--file', '-f', type=str, default='./configs/simulation-parameters/simulation_parameters.json',
               help='path to simulation parameters config file (.sumocfg).')
-@click.option('--init-delay', '-n', type=int, default=10, help='delay between vehicle departures during map '
+@click.option('--init-delay', '-n', type=int, default=10, help='Delay between vehicle departures during map '
                                                                'initialization by traffic.')
-@click.option('--part-of-the-path', '-p', type=float, default=0.5, help='the total part of the path that the '
+@click.option('--part-of-the-path', '-p', type=float, default=0.5, help='The total part of the path that the '
                                                                         'initializing traffic must travel for generation '
                                                                         'to begin using Poisson flows.')
-@click.option('--check-time', '-t', type=int, default=100, help='check time (in simulation ticks) whether '
+@click.option('--check-time', '-t', type=int, default=100, help='Check time (in simulation ticks) whether '
                                                                 'the traffic has traveled half of the total path in'
                                                                 'meters.')
-@click.option('--part-off-traffic-lights', '-l', default=0.2, type=float, help='this part of traffic lights '
+@click.option('--part-off-traffic-lights', '-l', default=0.2, type=float, help='This part of traffic lights '
                                                                                'will be turned off.')
-@click.option('--threshold-edge-length', '-e', type=int, help='traffic lights will be installed every '
-                                                              '[--threshold-edge-length] value meters on each edge, '
-                                                              'simulating pedestrian crossings.')
+@click.option('--threshold-edge-length', '-e', default=200, type=int, help='Traffic lights will be installed every '
+                                                                           '[--threshold-edge-length] value meters on each edge, '
+                                                                           'simulating pedestrian crossings.')
+@click.option('--cpu-scale', '-c', type=int, default=2, help="Process pool size during the operation of the Dijkstra "
+                                                             "algorithm and the path reconstruction algorithm for each departure "
+                                                             "node will be [number of cpu's] * [--cpu-scale]').")
 @click.argument('sumo_config', nargs=1, type=str)
 def main(duration: int, iterations: int, part_generators: float, file: str, init_delay: int, part_of_the_path: float,
-         check_time: int, part_off_traffic_lights: float, threshold_edge_length: int, sumo_config: str) -> None:
+         check_time: int, part_off_traffic_lights: float, threshold_edge_length: int, cpu_scale: int,
+         sumo_config: str) -> None:
     """
     This program generates a config with parameters for simulation.
     """
@@ -117,9 +96,15 @@ def main(duration: int, iterations: int, part_generators: float, file: str, init
     poisson_generators = generate_poisson_generators(part_generators, net)
     intensities = generate_intensities(len(poisson_generators), duration)
     turned_off_traffic_lights = make_list_of_turned_off_traffic_lights(part_off_traffic_lights, net)
-    data = {"DURATION": duration, "INIT_DELAY": init_delay, "ITERATIONS": iterations,
-            "PART_OF_THE_PATH": part_of_the_path, "CHECK_TIME": check_time, "intensities": intensities,
-            "poisson_generators_edges": poisson_generators, "turned_off_traffic_lights": turned_off_traffic_lights}
+    data = {"DURATION": duration,
+            "INIT_DELAY": init_delay,
+            "ITERATIONS": iterations,
+            "PART_OF_THE_PATH": part_of_the_path,
+            "CHECK_TIME": check_time,
+            "CPU_SCALE": cpu_scale,
+            "intensities": intensities,
+            "poisson_generators_edges": poisson_generators,
+            "turned_off_traffic_lights": turned_off_traffic_lights}
     with open(file, 'w') as json_file:
         json.dump(data, json_file, indent=4)
 
