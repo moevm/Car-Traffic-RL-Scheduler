@@ -2,6 +2,7 @@
 .idea/
 ../.idea/
 __pycache__/
+
 *.pyc
 .a2c_traffic_lights_tensorboard/
 ../pics/
