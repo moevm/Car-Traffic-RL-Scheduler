@@ -1,5 +1,5 @@
 import click
-from facade.facade import Facade
+from facade.facade import TrafficScheduler
 
 
 @click.command()
@@ -10,8 +10,9 @@ def main(sumo_config: str, simulation_parameters: str) -> None:
     """
     This program maximizes the transport capacity of road network.
     """
-    facade = Facade(sumo_config, simulation_parameters)
-    facade.execute()
+    scheduler = TrafficScheduler(sumo_config, simulation_parameters)
+    scheduler.learn()
+    # scheduler.predict('a2c_crossroad_2')
 
 
 if __name__ == "__main__":
