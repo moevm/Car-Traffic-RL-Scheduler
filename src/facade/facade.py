@@ -4,9 +4,10 @@ import sumolib
 import gymnasium as gym
 import traci
 from gymnasium.utils.env_checker import check_env
+from gymnasium.wrappers import FlattenObservation, NormalizeReward, NormalizeObservation
 from stable_baselines3.common.evaluation import evaluate_policy
 
-from facade.environment.traffic_lights_env import TrafficLightsEnv, TensorboardCallback, TrafficLightsEnv1
+from facade.environment.traffic_lights_env import TrafficLightsStaticEnv, TensorboardCallback
 from facade.generation.route_generator import RouteGenerator
 from facade.generation.transport_generator import TransportGenerator
 from facade.logger.logger import *
@@ -39,7 +40,7 @@ class TrafficScheduler:
         self.__step = 0
         self.__traffic_logger = Logger("[TrafficInfo]")
         self.__learning_logger = Logger("[LearningInfo]")
-        self.__num_envs = 6
+        self.__num_envs = 8
 
     def __extract_net_path(self) -> str:
         slash_position = self.__SUMO_CONFIG.rfind('/')
@@ -98,22 +99,27 @@ class TrafficScheduler:
                   step: int,
                   unique_phases_states: dict[str, int],
                   checkpoint_file: str,
-                  sumo_config: str):
+                  sumo_config: str,
+                  gui: bool):
         def _init():
-            env = TrafficLightsEnv1(
+            env = TrafficLightsStaticEnv(
                 turned_on_traffic_lights_ids,
                 route_generator,
                 transport_generator,
                 step,
                 unique_phases_states,
                 checkpoint_file,
-                sumo_config)
-            return env
+                sumo_config,
+                gui)
+            flatten_env = FlattenObservation(env)
+            observation_env = NormalizeObservation(flatten_env)
+            preprocessed_env = NormalizeReward(observation_env)
+            return preprocessed_env
 
         return _init
 
     def learn(self):
-        sumo_cmd = ["sumo-gui", "-c", self.__SUMO_CONFIG]
+        sumo_cmd = ["sumo", "-c", self.__SUMO_CONFIG]
         traci.start(sumo_cmd)
         self.__net.turn_off_traffic_lights(self.__simulation_params.turned_off_traffic_lights)
         self.__generate_initial_traffic()
@@ -121,27 +127,59 @@ class TrafficScheduler:
         unique_phases_states = self.__get_unique_phases_dict(turned_on_traffic_lights_ids)
         self.__learning_logger.print_info(Message.training_started)
         traci.simulation.saveState(self.__CHECKPOINT_CONFIG)
+        traci.close()
+        # env = TrafficLightsStaticEnv(
+        #     traffic_lights_ids=turned_on_traffic_lights_ids,
+        #     route_generator=self.__route_generator,
+        #     transport_generator=self.__transport_generator,
+        #     step=self.__step,
+        #     unique_phases=unique_phases_states,
+        #     checkpoint_file=self.__CHECKPOINT_CONFIG,
+        #     sumo_config=self.__SUMO_CONFIG
+        # )
+        # gym.register(
+        #     id="gymnasium_env/TrafficLightsStaticEnv-v0",
+        #     entry_point="facade.environment.traffic_lights_env:TrafficLightsStaticEnv"
+        # )
+        # env = gym.make(
+        #     id='gymnasium_env/TrafficLightsStaticEnv-v0',
+        #     traffic_lights_ids=turned_on_traffic_lights_ids,
+        #     route_generator=self.__route_generator,
+        #     transport_generator=self.__transport_generator,
+        #     step=self.__step,
+        #     unique_phases=unique_phases_states,
+        #     checkpoint_file=self.__CHECKPOINT_CONFIG,
+        #     sumo_config=self.__SUMO_CONFIG,
+        #     gui=True
+        # )
+        # print(f"CHECK RESULT IS {check_env(env.unwrapped)}")
         vec_env = SubprocVecEnv([self._make_env(turned_on_traffic_lights_ids,
                                                 self.__route_generator,
                                                 self.__transport_generator,
                                                 self.__step,
                                                 unique_phases_states,
                                                 self.__CHECKPOINT_CONFIG,
-                                                self.__SUMO_CONFIG) for _ in range(self.__num_envs)])
-        model = A2C(policy='MultiInputPolicy',
+                                                self.__SUMO_CONFIG, i == 0) for i in range(self.__num_envs)])
+        model = A2C(policy='MlpPolicy',
                     env=vec_env,
                     device='cuda',
                     tensorboard_log='./a2c_traffic_lights_tensorboard',
-                    n_steps=5)
+                    n_steps=60,  # попробовать 30, раньше было 15
+                    learning_rate=0.00075,  # не менять, самый лучший вариант (0.00050)
+                    gamma=0.99,
+                    gae_lambda=0.9,  # мб 0.95
+                    normalize_advantage=True,
+                    ent_coef=0.01,
+                    vf_coef=0.4)  # мб 0.3 или 0.35 или 0.45
         model.learn(total_timesteps=self.__simulation_params.DURATION,
                     progress_bar=True,
                     callback=TensorboardCallback(),
-                    log_interval=10)
+                    log_interval=1)
+        vec_env.close()
         model.save('a2c_crossroad_3')
-        traci.close()
 
     def predict(self, path):
-        sumo_cmd = ["sumo-gui", "-c", self.__SUMO_CONFIG]
+        sumo_cmd = ["sumo", "-c", self.__SUMO_CONFIG]
         traci.start(sumo_cmd)
         self.__net.turn_off_traffic_lights(self.__simulation_params.turned_off_traffic_lights)
         self.__generate_initial_traffic()
@@ -151,8 +189,7 @@ class TrafficScheduler:
         self.__learning_logger.print_info(Message.training_started)
         traci.simulation.saveState(self.__CHECKPOINT_CONFIG)
         traci.close()
-
-        env = TrafficLightsEnv1(
+        env = TrafficLightsStaticEnv(
             turned_on_traffic_lights_ids,
             self.__route_generator,
             self.__transport_generator,
@@ -161,19 +198,36 @@ class TrafficScheduler:
             self.__CHECKPOINT_CONFIG,
             self.__SUMO_CONFIG,
             gui=True)
-        model = A2C.load(path, env=env)
-        current_logic = traci.trafficlight.getAllProgramLogics(tls_id)[0]
-        n_phases = len(current_logic.phases)
-        mean_reward, std_reward = evaluate_policy(model, model.get_env(), n_eval_episodes=10)
-        vec_env = model.get_env()
-        obs = vec_env.reset()
-        for i in range(self.__simulation_params.DURATION):
+        flatten_env = FlattenObservation(env)
+        observation_env = NormalizeObservation(flatten_env)
+        preprocessed_env = NormalizeReward(observation_env)
+        model = A2C.load(path, env=preprocessed_env, device='cpu')
+        model_env = model.get_env()
+        obs = model_env.reset()
+        total_capacity = 0
+        for i in range(10000):
             action, _states = model.predict(obs, deterministic=True)
-            if action == [[1]]:
-                print("CHANGE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-            current_phase = traci.trafficlight.getPhase(tls_id)
-            if action == [[0]]:
-                traci.trafficlight.setPhase(tls_id, current_phase)
-            else:
-                traci.trafficlight.setPhase(tls_id, (current_phase + 1) % n_phases)
-            obs, rewards, dones, info = vec_env.step(action)
+            obs, rewards, dones, info = model_env.step(action)
+            total_capacity += info[0]["capacity"]
+        print(f"total capacity using model = {total_capacity}")
+        model_env.close()
+        schedule = env.get_schedule()
+        self.default_tls(schedule)
+
+    def default_tls(self, schedule):
+        sumo_cmd = ["sumo-gui", "-c", self.__SUMO_CONFIG]
+        traci.start(sumo_cmd)
+        self.__step = 0
+        self.__generate_initial_traffic()
+        total_capacity = 0
+        for _ in range(10000):
+            if self.__step in schedule:
+                self.__route_generator.make_routes(schedule[self.__step])
+                last_target_nodes_data = self.__route_generator.get_last_target_nodes_data()
+                self.__transport_generator.generate_transport(last_target_nodes_data)
+            traci.simulationStep()
+            self.__step += 1
+            self.__transport_generator.clean_vehicles_data()
+            total_capacity += traci.simulation.getArrivedNumber()
+        print(f"total capacity using default tls = {total_capacity}")
+        traci.close()

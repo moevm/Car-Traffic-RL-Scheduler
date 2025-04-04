@@ -11,9 +11,9 @@ def main(sumo_config: str, simulation_parameters: str) -> None:
     This program maximizes the transport capacity of road network.
     """
     scheduler = TrafficScheduler(sumo_config, simulation_parameters)
-    scheduler.learn()
-    # scheduler.predict('a2c_crossroad_2')
-
+    #scheduler.learn()
+    scheduler.predict('a2c_crossroad_3')
+    #scheduler.default_tls()
 
 if __name__ == "__main__":
     main()

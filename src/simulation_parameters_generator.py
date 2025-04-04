@@ -2,13 +2,15 @@ import click
 import random
 import json
 
+from pygments.lexer import default
+
 from facade.net import Net
 from facade.logger.network_logger import NetworkLogger
 from facade.logger.logger import Message
 
 
-def generate_intensities(n_generators: int, duration: int, upper_limit: float) -> list:
-    intensities = [random.uniform(1 / duration, upper_limit) for _ in range(n_generators)]
+def generate_intensities(n_generators: int, lower_limit: float, upper_limit: float) -> list:
+    intensities = [random.uniform(lower_limit, upper_limit) for _ in range(n_generators)]
     return intensities
 
 
@@ -61,31 +63,33 @@ def make_list_of_turned_off_traffic_lights(part_off_traffic_lights: float, net: 
 
 
 @click.command()
-@click.option('--duration', '-d', type=int, default=1000000, help='Simulation duration in steps.')
-@click.option('--iterations', '-i', type=int, default=10, help='Number '
-                                                               'of iterations of initial traffic generation.')
+@click.option('--duration', '-d', type=int, default=1000000, help='Simulation duration in steps.\n')
+@click.option('--iterations', '-i', type=int, default=5, help='Number '
+                                                               'of iterations of initial traffic generation.\n')
 @click.option('--part-generators', '-g', type=float, default=0.5, help='This part of the edges will act '
-                                                                       'as flow generators.')
+                                                                       'as flow generators.\n')
 @click.option('--file', '-f', type=str, default='./configs/simulation-parameters/simulation_parameters.json',
-              help='path to simulation parameters config file (.sumocfg).')
+              help='path to simulation parameters config file (.sumocfg).\n')
 @click.option('--init-delay', '-n', type=int, default=10, help='Delay between vehicle departures during map '
-                                                               'initialization by traffic.')
+                                                               'initialization by traffic.\n')
 @click.option('--part-of-the-path', '-p', type=float, default=0.3, help='The total part of the path that the '
                                                                         'initializing traffic must travel for generation '
-                                                                        'to begin using Poisson flows.')
+                                                                        'to begin using Poisson flows.\n')
 @click.option('--check-time', '-t', type=int, default=100, help='Check time (in simulation ticks) whether '
                                                                 'the traffic has traveled half of the total path in'
-                                                                'meters.')
-@click.option('--part-off-traffic-lights', '-l', default=0.2, type=float, help='This part of traffic lights '
-                                                                               'will be turned off.')
+                                                                'meters.\n')
+@click.option('--part-off-traffic-lights', '-t', default=0.2, type=float, help='This part of traffic lights '
+                                                                               'will be turned off.\n')
 @click.option('--threshold-edge-length', '-e', default=200, type=int, help='Traffic lights will be installed every '
                                                                            '[--threshold-edge-length] value meters on each edge, '
-                                                                           'simulating pedestrian crossings.')
+                                                                           'simulating pedestrian crossings.\n')
 @click.option('--cpu-scale', '-c', type=int, default=2, help="Process pool size during the operation of the Dijkstra "
                                                              "algorithm and the path reconstruction algorithm for each departure "
-                                                             "node will be [number of cpu's] * [--cpu-scale]').")
+                                                             "node will be [number of cpu's] * [--cpu-scale]').\n")
+@click.option('--lower-limit-of-intensity', '-l', type=float, default=0.0001,
+              help='Lower bound of traffic intensity for each generator.\n')
 @click.option('--upper-limit-of-intensity', '-u', type=float, default=0.05,
-              help="Upper bound on traffic intensity for each generator.")
+              help='Upper bound on traffic intensity for each generator.\n')
 @click.argument('sumo_config', nargs=1, type=str)
 def main(duration: int,
          iterations: int,
@@ -98,6 +102,7 @@ def main(duration: int,
          threshold_edge_length: int,
          cpu_scale: int,
          upper_limit_of_intensity: float,
+         lower_limit_of_intensity: float,
          sumo_config: str) -> None:
     """
     This program generates a config with parameters for simulation.
@@ -105,7 +110,7 @@ def main(duration: int,
     net_config = extract_net_config(sumo_config)
     net = Net(net_config, [])
     poisson_generators = generate_poisson_generators(part_generators, net)
-    intensities = generate_intensities(len(poisson_generators), duration, upper_limit_of_intensity)
+    intensities = generate_intensities(len(poisson_generators), lower_limit_of_intensity, upper_limit_of_intensity)
     turned_off_traffic_lights = make_list_of_turned_off_traffic_lights(part_off_traffic_lights, net)
     data = {"DURATION": duration,
             "INIT_DELAY": init_delay,
