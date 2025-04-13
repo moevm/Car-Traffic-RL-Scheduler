@@ -14,7 +14,7 @@ from facade.logger.logger import *
 from facade.net import Net
 from facade.structures import SimulationParams
 from stable_baselines3 import A2C
-from stable_baselines3.common.vec_env import SubprocVecEnv
+from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize
 
 
 class TrafficScheduler:
@@ -40,7 +40,7 @@ class TrafficScheduler:
         self.__step = 0
         self.__traffic_logger = Logger("[TrafficInfo]")
         self.__learning_logger = Logger("[LearningInfo]")
-        self.__num_envs = 8
+        self.__num_envs = 1
 
     def __extract_net_path(self) -> str:
         slash_position = self.__SUMO_CONFIG.rfind('/')
@@ -112,11 +112,13 @@ class TrafficScheduler:
                 sumo_config,
                 gui)
             flatten_env = FlattenObservation(env)
-            observation_env = NormalizeObservation(flatten_env)
-            preprocessed_env = NormalizeReward(observation_env)
-            return preprocessed_env
+            return flatten_env
 
         return _init
+
+    @staticmethod
+    def __learning_rate_schedule(progress: float) -> float:
+        return 0.00005 + (0.0005 - 0.00005) * progress
 
     def learn(self):
         sumo_cmd = ["sumo", "-c", self.__SUMO_CONFIG]
@@ -128,31 +130,6 @@ class TrafficScheduler:
         self.__learning_logger.print_info(Message.training_started)
         traci.simulation.saveState(self.__CHECKPOINT_CONFIG)
         traci.close()
-        # env = TrafficLightsStaticEnv(
-        #     traffic_lights_ids=turned_on_traffic_lights_ids,
-        #     route_generator=self.__route_generator,
-        #     transport_generator=self.__transport_generator,
-        #     step=self.__step,
-        #     unique_phases=unique_phases_states,
-        #     checkpoint_file=self.__CHECKPOINT_CONFIG,
-        #     sumo_config=self.__SUMO_CONFIG
-        # )
-        # gym.register(
-        #     id="gymnasium_env/TrafficLightsStaticEnv-v0",
-        #     entry_point="facade.environment.traffic_lights_env:TrafficLightsStaticEnv"
-        # )
-        # env = gym.make(
-        #     id='gymnasium_env/TrafficLightsStaticEnv-v0',
-        #     traffic_lights_ids=turned_on_traffic_lights_ids,
-        #     route_generator=self.__route_generator,
-        #     transport_generator=self.__transport_generator,
-        #     step=self.__step,
-        #     unique_phases=unique_phases_states,
-        #     checkpoint_file=self.__CHECKPOINT_CONFIG,
-        #     sumo_config=self.__SUMO_CONFIG,
-        #     gui=True
-        # )
-        # print(f"CHECK RESULT IS {check_env(env.unwrapped)}")
         vec_env = SubprocVecEnv([self._make_env(turned_on_traffic_lights_ids,
                                                 self.__route_generator,
                                                 self.__transport_generator,
@@ -160,23 +137,25 @@ class TrafficScheduler:
                                                 unique_phases_states,
                                                 self.__CHECKPOINT_CONFIG,
                                                 self.__SUMO_CONFIG, i == 0) for i in range(self.__num_envs)])
+        vec_env = VecNormalize(vec_env, norm_obs=True, norm_reward=True)
         model = A2C(policy='MlpPolicy',
                     env=vec_env,
-                    device='cuda',
                     tensorboard_log='./a2c_traffic_lights_tensorboard',
-                    n_steps=60,  # попробовать 30, раньше было 15
-                    learning_rate=0.00075,  # не менять, самый лучший вариант (0.00050)
-                    gamma=0.99,
-                    gae_lambda=0.9,  # мб 0.95
+                    learning_rate=self.__learning_rate_schedule,
+                    n_steps=60,
+                    max_grad_norm=1.5,
                     normalize_advantage=True,
+                    gae_lambda=0.9,
                     ent_coef=0.01,
-                    vf_coef=0.4)  # мб 0.3 или 0.35 или 0.45
+                    vf_coef=0.3,
+                    device='cpu'
+                    )
         model.learn(total_timesteps=self.__simulation_params.DURATION,
                     progress_bar=True,
                     callback=TensorboardCallback(),
                     log_interval=1)
         vec_env.close()
-        model.save('a2c_crossroad_3')
+        model.save('a2c_crossroad_4')
 
     def predict(self, path):
         sumo_cmd = ["sumo", "-c", self.__SUMO_CONFIG]
@@ -198,10 +177,15 @@ class TrafficScheduler:
             self.__CHECKPOINT_CONFIG,
             self.__SUMO_CONFIG,
             gui=True)
-        flatten_env = FlattenObservation(env)
-        observation_env = NormalizeObservation(flatten_env)
-        preprocessed_env = NormalizeReward(observation_env)
-        model = A2C.load(path, env=preprocessed_env, device='cpu')
+        vec_env = SubprocVecEnv([self._make_env(turned_on_traffic_lights_ids,
+                                                self.__route_generator,
+                                                self.__transport_generator,
+                                                self.__step,
+                                                unique_phases_states,
+                                                self.__CHECKPOINT_CONFIG,
+                                                self.__SUMO_CONFIG, i == 0) for i in range(self.__num_envs)])
+        vec_env = VecNormalize(vec_env, norm_obs=True, norm_reward=True)
+        model = A2C.load(path, env=vec_env, device='cpu')
         model_env = model.get_env()
         obs = model_env.reset()
         total_capacity = 0

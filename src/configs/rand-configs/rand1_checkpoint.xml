@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- generated on 2025-04-13 03:55:41 by Eclipse SUMO sumo Version 1.22.0
+<sumoConfiguration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/sumoConfiguration.xsd">
+
+    <input>
+        <net-file value="configs/rand-configs/rand1.net.xml"/>
+    </input>
+
+    <traci_server>
+        <remote-port value="41417"/>
+    </traci_server>
+
+</sumoConfiguration>
+-->
+
+<snapshot xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/state_file.xsd" version="1.22.0" time="100.00" type="micro">
+    <route id="0" state="1" edges="-11 3"/>
+    <route id="1" state="1" edges="-13 -3 9 20"/>
+    <route id="10" state="1" edges="-22"/>
+    <route id="11" state="1" edges="-7 9"/>
+    <route id="12" state="1" edges="-11 9 20"/>
+    <route id="13" state="1" edges="-13 -3 9 22"/>
+    <route id="14" state="1" edges="-20 -9 3"/>
+    <route id="15" state="1" edges="-22 -9 3"/>
+    <route id="16" state="1" edges="-16 -9 7"/>
+    <route id="17" state="1" edges="-7 3"/>
+    <route id="18" state="1" edges="-11 9 22"/>
+    <route id="19" state="1" edges="-13"/>
+    <route id="2" state="1" edges="-16 20"/>
+    <route id="20" state="1" edges="-16 -9 3"/>
+    <route id="21" state="1" edges="-20 22"/>
+    <route id="22" state="1" edges="-22 -9 3 13"/>
+    <route id="23" state="1" edges="-7 9 20"/>
+    <route id="24" state="1" edges="-16 22"/>
+    <route id="25" state="1" edges="-11 9 16"/>
+    <route id="26" state="1" edges="-13 -3 11"/>
+    <route id="27" state="1" edges="-20 -9"/>
+    <route id="28" state="1" edges="-22 -9 11"/>
+    <route id="29" state="1" edges="-7 9 16"/>
+    <route id="3" state="1" edges="-20 -9 3 13"/>
+    <route id="4" state="1" edges="-22 20"/>
+    <route id="5" state="1" edges="-7 3"/>
+    <route id="6" state="1" edges="-11 3 13"/>
+    <route id="7" state="1" edges="-13 -3 9 16"/>
+    <route id="8" state="1" edges="-16 -9 3"/>
+    <route id="9" state="1" edges="-20"/>
+    <delay number="27" begin="30" end="3" depart="0.00" time="159.00"/>
+    <vType id="DEFAULT_VEHTYPE"/>
+    <vehicle id="0" depart="0.00" color="45,244,91" route="0" distance="566.42 0" speedFactor="1.0600" state="1 0 1 5.10 0 11.04 99000 0 0" pos="726.34 721.34 13.63" speed="13.63 13.52" angle="193.50" posLat="0.00" waitingTime="100000 0"/>
+    <vehicle id="1" depart="0.00" color="156,32,80" route="1" distance="383.16 0" speedFactor="1.0104" state="1 0 1 5.10 0 10.36 99000 0 0" pos="856.85 851.85 13.73" speed="13.73 13.20" angle="13.50" posLat="0.00" waitingTime="100000 0"/>
+    <vehicle id="11" depart="10.00" color="43,14,113" route="11" distance="817.89 0" speedFactor="1.0263" state="1 10000 1 5.10 0 27.79 99000 0 0" pos="51.38 46.38 14.16" speed="14.16 14.05" angle="87.83" posLat="0.00" waitingTime="100000 1 9000 26000"/>
+    <vehicle id="12" depart="20.00" color="219,3,12" route="12" distance="572.36 0" speedFactor="1.0471" state="1 20000 1 5.10 0 6.62 99000 0 0" pos="485.45 480.45 13.67" speed="13.67 13.29" angle="87.83" posLat="0.00" waitingTime="100000 0"/>
+    <vehicle id="13" depart="20.00" color="226,19,195" route="13" distance="383.16 0" speedFactor="1.1229" state="1 20000 1 5.10 0 17.79 99000 0 0" pos="567.06 562.06 11.62" speed="11.62 12.45" angle="13.50" posLat="0.00" waitingTime="100000 0"/>
+    <vehicle id="14" depart="20.00" color="139,118,238" route="14" distance="0 0" speedFactor="0.9912" state="1 20000 0 5.10 4000 16.02 99000 0 0" pos="872.24 867.24 0.00" speed="0.00 0.00" angle="310.45" posLat="0.00" waitingTime="100000 1 0 4000"/>
+    <vehicle id="15" depart="20.00" color="131,197,96" route="15" distance="636.02 0" speedFactor="0.9268" state="1 20000 1 5.10 0 8.23 99000 0 0" pos="269.41 264.41 11.97" speed="11.97 11.82" angle="267.83" posLat="0.00" waitingTime="100000 0"/>
+    <vehicle id="16" depart="20.00" color="199,115,3" route="16" distance="764.33 0" speedFactor="0.9414" state="1 20000 1 5.10 0 18.67 99000 0 0" pos="29.59 24.59 12.37" speed="12.37 12.68" angle="267.83" posLat="0.00" waitingTime="100000 1 8000 15000"/>
+    <vehicle id="17" depart="20.00" color="192,53,100" route="17" distance="817.63 0" speedFactor="0.8784" state="1 20000 1 5.10 0 10.47 99000 0 0" pos="23.58 18.58 11.92" speed="11.92 11.44" angle="193.50" posLat="0.00" waitingTime="100000 0"/>
+    <vehicle id="18" depart="30.00" color="237,185,163" route="18" distance="572.36 0" speedFactor="0.9362" state="1 30000 1 5.10 0 6.12 99000 0 0" pos="250.43 245.43 12.50" speed="12.50 12.31" angle="87.83" posLat="0.00" waitingTime="100000 0"/>
+    <vehicle id="2" depart="0.00" color="231,150,252" route="2" distance="765.3 0" speedFactor="1.0827" state="1 0 1 5.10 0 42.34 99000 0 0" pos="79.53 74.53 14.07" speed="14.07 14.65" angle="130.45" posLat="0.00" waitingTime="100000 1 10000 42000"/>
+    <vehicle id="20" depart="30.00" color="53,183,112" route="20" distance="764.33 0" speedFactor="1.0102" state="1 30000 1 5.10 0 14.29 99000 0 0" pos="8.41 3.41 12.25" speed="12.25 10.64" angle="267.83" posLat="0.00" waitingTime="100000 1 7000 9000"/>
+    <vehicle id="21" depart="30.00" color="191,27,199" route="21" distance="0 0" speedFactor="1.1582" state="1 30000 0 5.10 3000 15.56 99000 0 0" pos="864.74 859.74 0.02" speed="0.02 0.06" angle="310.45" posLat="0.00" waitingTime="100000 1 0 3000"/>
+    <vehicle id="22" depart="30.00" color="27,174,57" route="22" distance="636.02 0" speedFactor="0.9750" state="1 30000 1 5.10 0 11.42 99000 0 0" pos="142.07 137.07 11.29" speed="11.29 11.70" angle="267.83" posLat="0.00" waitingTime="100000 0"/>
+    <vehicle id="23" depart="30.00" color="39,141,225" route="23" distance="0 0" speedFactor="0.8896" state="1 30000 0 5.10 0 6.85 99000 0 0" pos="773.01 768.01 11.20" speed="11.20 11.96" angle="180.90" posLat="0.00" waitingTime="100000 0"/>
+    <vehicle id="24" depart="40.00" color="228,114,107" route="24" distance="0 0" speedFactor="0.8257" state="1 40000 0 5.10 0 5.41 99000 0 0" pos="619.71 614.71 11.24" speed="11.24 10.98" angle="253.37" posLat="0.00" waitingTime="100000 0"/>
+    <vehicle id="25" depart="40.00" color="166,38,252" route="25" distance="0 0" speedFactor="0.8726" state="1 40000 0 5.10 6000 13.60 99000 0 0" pos="555.33 550.33 0.00" speed="0.00 0.00" angle="107.24" posLat="0.00" waitingTime="100000 1 0 6000"/>
+    <vehicle id="26" depart="40.00" color="119,141,134" route="26" distance="383.16 0" speedFactor="0.9488" state="1 40000 1 5.10 0 8.08 99000 0 0" pos="286.46 281.46 12.02" speed="12.02 12.29" angle="13.50" posLat="0.00" waitingTime="100000 0"/>
+    <vehicle id="27" depart="40.00" color="207,205,0" route="27" distance="0 0" speedFactor="0.9313" state="1 40000 0 5.10 0 5.83 99000 0 0" pos="692.89 687.89 12.69" speed="12.69 11.70" angle="310.45" posLat="0.00" waitingTime="100000 0"/>
+    <vehicle id="28" depart="40.00" color="168,51,57" route="28" distance="0 0" speedFactor="1.1318" state="1 40000 0 5.10 10000 19.61 99000 0 0" pos="624.41 619.41 0.00" speed="0.00 0.00" angle="184.78" posLat="0.00" waitingTime="100000 1 0 10000"/>
+    <vehicle id="29" depart="40.00" color="121,2,50" route="29" distance="0 0" speedFactor="0.9172" state="1 40000 0 5.10 0 5.71 99000 0 0" pos="684.04 679.04 12.40" speed="12.40 11.58" angle="180.90" posLat="0.00" waitingTime="100000 0"/>
+    <vehicle id="3" depart="0.00" color="29,216,208" route="3" distance="890.3 0" speedFactor="0.8310" state="1 0 1 5.10 0 8.18 99000 0 0" pos="163.14 158.14 10.67" speed="10.67 10.57" angle="267.83" posLat="0.00" waitingTime="100000 0"/>
+    <vehicle id="4" depart="0.00" color="54,109,27" route="4" distance="644.12 0" speedFactor="1.0303" state="1 0 1 5.10 0 8.17 99000 0 0" pos="658.71 653.71 13.45" speed="13.45 14.18" angle="130.45" posLat="0.00" waitingTime="100000 0"/>
+    <vehicle id="5" depart="0.00" color="200,178,211" route="5" distance="817.63 0" speedFactor="0.9383" state="1 0 1 5.10 0 30.37 99000 0 0" pos="81.93 76.93 12.03" speed="12.03 13.00" angle="193.50" posLat="0.00" waitingTime="100000 1 10000 30000"/>
+    <vehicle id="6" depart="10.00" color="189,222,148" route="6" distance="566.42 0" speedFactor="1.0458" state="1 10000 1 5.10 0 7.95 99000 0 0" pos="602.57 597.57 13.42" speed="13.42 13.28" angle="193.50" posLat="0.00" waitingTime="100000 0"/>
+    <vehicle id="7" depart="10.00" color="215,58,234" route="7" distance="383.16 0" speedFactor="0.8860" state="1 10000 1 5.10 0 9.92 99000 0 0" pos="588.39 583.39 12.04" speed="12.04 11.78" angle="13.50" posLat="0.00" waitingTime="100000 0"/>
+    <vehicle id="8" depart="10.00" color="209,2,96" route="8" distance="764.33 0" speedFactor="0.9379" state="1 10000 1 5.10 0 26.85 99000 0 0" pos="50.41 45.41 12.18" speed="12.18 12.80" angle="267.83" posLat="0.00" waitingTime="100000 1 9000 25000"/>
+    <lane id="-11_0">
+        <vehicles value="25"/>
+    </lane>
+    <lane id="-16_0">
+        <vehicles value="24"/>
+    </lane>
+    <lane id="-20_0">
+        <vehicles value="27 21 14"/>
+    </lane>
+    <lane id="-22_0">
+        <vehicles value="28"/>
+    </lane>
+    <lane id="-3_0">
+        <vehicles value="26 13 7 1"/>
+    </lane>
+    <lane id="-7_0">
+        <vehicles value="29 23"/>
+    </lane>
+    <lane id="-9_0">
+        <vehicles value="20 16 8 22 3 15"/>
+    </lane>
+    <lane id="20_0">
+        <vehicles value="2 4"/>
+    </lane>
+    <lane id="3_0">
+        <vehicles value="17 5 6 0"/>
+    </lane>
+    <lane id="9_0">
+        <vehicles value="11 18 12"/>
+    </lane>
+    <tlLogic id="1" programID="0" phase="0" duration="10000"/>
+    <tlLogic id="8" programID="0" phase="0" duration="10000"/>
+</snapshot>
