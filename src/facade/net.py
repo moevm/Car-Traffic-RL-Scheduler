@@ -385,3 +385,7 @@ class Net:
 
     def get_shortest_path(self, start_node: str, end_node: str) -> list[str]:
         return self.__paths[start_node][end_node]
+
+    def get_number_of_lanes(self):
+        edge = self.__edges[0]
+        return traci.edge.getLaneNumber(edge)

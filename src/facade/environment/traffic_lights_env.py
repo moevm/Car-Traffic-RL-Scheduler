@@ -218,6 +218,7 @@ class TrafficLightsStaticEnv(gym.Env):
     def get_schedule(self):
         return self.__schedule
 
+
 class TrafficLightsDynamicEnv(gym.Env):
     def __init__(self,
                  traffic_lights_ids: list[str],
@@ -227,7 +228,12 @@ class TrafficLightsDynamicEnv(gym.Env):
                  unique_phases: dict[str, int],
                  checkpoint_file: str,
                  sumo_config: str,
+                 traffic_lights_groups: list[list[str]],
+                 n_lanes: int,
                  gui: bool = False):
+        self.n_lanes = n_lanes
+        self.__traffic_lights_groups = traffic_lights_groups
+        self.__unique_phases = unique_phases
         self.__schedule = transport_generator.generate_schedule_for_poisson_flow(step + 1)
         self.__route_generator = route_generator
         self.__transport_generator = transport_generator
@@ -245,24 +251,19 @@ class TrafficLightsDynamicEnv(gym.Env):
         traci.simulation.loadState(self.__checkpoint_file)
         observation_space = self.__make_observation_space()
         self.observation_space = Dict(observation_space)
-        self.action_space = MultiBinary(self.n_traffic_lights)
+        self.action_space = MultiBinary(4)
         self.__total_capacity = 0
         self.__n_steps_capacity = {tls_id: 0 for tls_id in self.traffic_lights_ids}
         self.__i_window = 0
 
     def __make_observation_space(self):
-        observation_space = {}
-        for tls_id in self.traffic_lights_ids:
-            n_lanes = len(set(traci.trafficlight.getControlledLanes(tls_id)))
-            current_logic = traci.trafficlight.getAllProgramLogics(tls_id)[0]
-            n_phases = len(current_logic.phases)
-            tls_info = Dict({
-                "density": Box(low=0, high=100, shape=(n_lanes,), dtype=np.float32),
-                "waiting": Box(low=0, high=1, shape=(n_lanes,), dtype=np.float32),
-                "phase": Discrete(n_phases),
-                "time": Box(low=0, high=600, dtype=np.float32),
-            })
-            observation_space[tls_id] = tls_info
+        observation_space = Dict({
+            "density": Box(low=0, high=100, shape=(4, self.n_lanes * 4), dtype=np.float32),
+            "waiting": Box(low=0, high=1, shape=(4, self.n_lanes * 4), dtype=np.float32),
+            # "phase": MultiDiscrete([len(self.__unique_phases)] * 4),
+            "phase": MultiDiscrete([4] * 4),
+            "time": Box(low=0, high=600, shape=(4,), dtype=np.float32)
+        })
         return observation_space
 
     @staticmethod
@@ -277,25 +278,27 @@ class TrafficLightsDynamicEnv(gym.Env):
         }
         return info
 
-    def __get_observation(self):
-        observation = {}
-        for i, tls_id in enumerate(self.traffic_lights_ids):
-            lanes = set(traci.trafficlight.getControlledLanes(tls_id))
-            n_lanes = len(lanes)
-            density = np.zeros(shape=(n_lanes,), dtype=np.float32)
-            waiting = np.zeros(shape=(n_lanes,), dtype=np.float32)
-            speed = np.zeros(shape=(n_lanes,), dtype=np.int16)
+    def __get_observation(self, i):
+        tls_group = self.__traffic_lights_groups[i]
+        tls_id = tls_group[0]
+        lanes = set(traci.trafficlight.getControlledLanes(tls_id))
+        density = np.zeros(shape=(4, self.n_lanes * 4), dtype=np.float32)
+        waiting = np.zeros(shape=(4, self.n_lanes * 4), dtype=np.float32)
+        phase = np.zeros(shape=(4,), dtype=np.int32)
+        time = np.zeros(shape=(4,), dtype=np.int32)
+        for i, tls_id in enumerate(tls_group):
             for j, lane in enumerate(lanes):
-                waiting[j] = traci.lane.getLastStepHaltingNumber(lane) / traci.lane.getLength(lane)
-                density[j] = traci.lane.getLastStepOccupancy(lane)
-                speed[j] = traci.lane.getLastStepMeanSpeed(lane)
-            tls_info = {
-                "density": density,
-                "waiting": waiting,
-                "phase": traci.trafficlight.getPhase(tls_id),
-                "time": traci.trafficlight.getSpentDuration(tls_id),
-            }
-            observation[tls_id] = tls_info
+                waiting[i, j] = traci.lane.getLastStepHaltingNumber(lane) / traci.lane.getLength(lane)
+                density[i, j] = traci.lane.getLastStepOccupancy(lane)
+            # phase[i] = self.__unique_phases[traci.trafficlight.getRedYellowGreenState(tls_id)]
+            phase[i] = traci.trafficlight.getPhase(tls_id)
+            time[i] = traci.trafficlight.getSpentDuration(tls_id)
+        observation = {
+            "density": density,
+            "waiting": waiting,
+            "phase": phase,
+            "time": time,
+        }
         return observation
 
     def reset(
@@ -304,15 +307,16 @@ class TrafficLightsDynamicEnv(gym.Env):
             seed: int | None = None,
             options: dict[str, Any] | None = None,
     ) -> tuple[ObsType, dict[str, Any]]:
-        observation = self.__get_observation()
+        observation = self.__get_observation(0)
         self.local_step = 0
         self.__total_capacity = 0
         info = self.__get_info(0, 0, 0, 0, 0)
         return observation, info
 
-    def __change_phase(self, action) -> int:
+    def __change_phase(self, action, i) -> int:
         tls_reward = 0
-        for i, tls_id in enumerate(self.traffic_lights_ids):
+        tls_group = self.__traffic_lights_groups[i]
+        for i, tls_id in enumerate(tls_group):
             current_logic = traci.trafficlight.getAllProgramLogics(tls_id)[0]
             n_phases = len(current_logic.phases)
             n_lanes = len(set(traci.trafficlight.getControlledLanes(tls_id)))
@@ -335,39 +339,43 @@ class TrafficLightsDynamicEnv(gym.Env):
                     traci.trafficlight.setPhase(tls_id, (current_phase + 1) % n_phases)
         return tls_reward
 
-    def __get_vehicles_on_lanes(self) -> dict[str, list[list[str]]]:
+    def __get_vehicles_on_lanes(self, i) -> dict[str, list[list[str]]]:
+        tls_group = self.__traffic_lights_groups[i]
         vehicles_on_lanes = {}
-        for i, tls_id in enumerate(self.traffic_lights_ids):
+        for i, tls_id in enumerate(tls_group):
             lanes = set(traci.trafficlight.getControlledLanes(tls_id))
             vehicles_on_lanes[tls_id] = []
             for lane in lanes:
                 vehicles_on_lanes[tls_id].append(traci.lane.getLastStepVehicleIDs(lane))
         return vehicles_on_lanes
 
-    def __calculate_halting_reward(self):
+    def __calculate_halting_reward(self, i):
+        tls_group = self.__traffic_lights_groups[i]
         sum_halting_number = 0
-        for i, tls_id in enumerate(self.traffic_lights_ids):
+        for i, tls_id in enumerate(tls_group):
             lanes = set(traci.trafficlight.getControlledLanes(tls_id))
             for lane in lanes:
                 sum_halting_number += traci.lane.getLastStepHaltingNumber(lane) / traci.lane.getLength(lane)
         return -sum_halting_number
 
-    def __calculate_phase_capacity(self, action):
+    def __calculate_phase_capacity(self, action, i):
         phase_capacity = 0
-        for i in range(len(action)):
-            tls_id = self.traffic_lights_ids[i]
+        tls_group = self.__traffic_lights_groups[i]
+        for j in range(len(action)):
+            tls_id = tls_group[j]
             current_logic = traci.trafficlight.getAllProgramLogics(tls_id)[0]
             current_phase = traci.trafficlight.getPhase(tls_id)
             state = current_logic.phases[current_phase].state
-            if action[i] == 1 and 'y' not in state and 'Y' not in state:
+            if action[j] == 1 and 'y' not in state and 'Y' not in state:
                 phase_capacity += self.__n_steps_capacity[tls_id] * min(
                     (traci.trafficlight.getSpentDuration(tls_id) / 25) ** 0.5, 1)
-                self.__n_steps_capacity[self.traffic_lights_ids[i]] = 0
+                self.__n_steps_capacity[tls_id] = 0
         return phase_capacity
 
     def __calculate_step_capacity(self, vehicles_on_tls_before: dict[str, list[list[str]]],
-                                  vehicles_on_tls_after: dict[str, list[list[str]]]) -> int:
-        local_reward = {tls_id: 0 for tls_id in self.traffic_lights_ids}
+                                  vehicles_on_tls_after: dict[str, list[list[str]]], i) -> int:
+        tls_group = self.__traffic_lights_groups[i]
+        local_reward = {tls_id: 0 for tls_id in tls_group}
         for tls_id in vehicles_on_tls_before.keys():
             current_logic = traci.trafficlight.getAllProgramLogics(tls_id)[0]
             current_phase = traci.trafficlight.getPhase(tls_id)
@@ -383,7 +391,7 @@ class TrafficLightsDynamicEnv(gym.Env):
                             reward += 1
                 local_reward[tls_id] = reward * min((traci.trafficlight.getSpentDuration(tls_id) / 25) ** 0.5, 1)
         step_capacity = 0
-        for tls_id in self.traffic_lights_ids:
+        for tls_id in tls_group:
             step_capacity += local_reward[tls_id]
             self.__n_steps_capacity[tls_id] += local_reward[tls_id]
         return step_capacity
@@ -400,21 +408,22 @@ class TrafficLightsDynamicEnv(gym.Env):
         current_phase = traci.trafficlight.getPhase(tls_id)
         state = current_logic.phases[current_phase].state
         phase_duration = traci.trafficlight.getSpentDuration(tls_id)
-        tls_reward = self.__change_phase(action)
+        tls_reward = self.__change_phase(action, self.__i_window)
         if action[0] == 0 or 'y' in state or 'Y' in state:
             phase_duration = -1
-        vehicles_on_tls_before = self.__get_vehicles_on_lanes()
+        vehicles_on_tls_before = self.__get_vehicles_on_lanes(self.__i_window)
         traci.simulationStep()
-        vehicles_on_tls_after = self.__get_vehicles_on_lanes()
-        step_capacity = self.__calculate_step_capacity(vehicles_on_tls_before, vehicles_on_tls_after)
-        phase_capacity = self.__calculate_phase_capacity(action)
-        halting_reward = self.__calculate_halting_reward()
+        vehicles_on_tls_after = self.__get_vehicles_on_lanes(self.__i_window)
+        step_capacity = self.__calculate_step_capacity(vehicles_on_tls_before, vehicles_on_tls_after, self.__i_window)
+        phase_capacity = self.__calculate_phase_capacity(action, self.__i_window)
+        halting_reward = self.__calculate_halting_reward(self.__i_window)
         reward = tls_reward + step_capacity + phase_capacity + halting_reward
+        self.__i_window = (self.__i_window + 1) % len(self.__traffic_lights_groups)
+        observation = self.__get_observation(self.__i_window)
         self.local_step += 1
         self.__global_step += 1
-        observation = self.__get_observation()
         info = self.__get_info(tls_reward, step_capacity, phase_capacity, halting_reward, phase_duration)
-        truncated = self.local_step == 6000
+        truncated = self.local_step == 30_000
         terminated = False
         self.__transport_generator.clean_vehicles_data()
         return observation, reward, terminated, truncated, info
@@ -424,6 +433,7 @@ class TrafficLightsDynamicEnv(gym.Env):
 
     def get_schedule(self):
         return self.__schedule
+
 
 class TensorboardCallback(BaseCallback):
     def __init__(self, verbose=0):

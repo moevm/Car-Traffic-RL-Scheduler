@@ -7,7 +7,7 @@ from gymnasium.utils.env_checker import check_env
 from gymnasium.wrappers import FlattenObservation, NormalizeReward, NormalizeObservation
 from stable_baselines3.common.evaluation import evaluate_policy
 
-from facade.environment.traffic_lights_env import TrafficLightsStaticEnv, TensorboardCallback
+from facade.environment.traffic_lights_env import TrafficLightsStaticEnv, TensorboardCallback, TrafficLightsDynamicEnv
 from facade.generation.route_generator import RouteGenerator
 from facade.generation.transport_generator import TransportGenerator
 from facade.logger.logger import *
@@ -93,14 +93,14 @@ class TrafficScheduler:
         return unique_phases_states_dict
 
     @staticmethod
-    def _make_env(turned_on_traffic_lights_ids: list[str],
-                  route_generator: RouteGenerator,
-                  transport_generator: TransportGenerator,
-                  step: int,
-                  unique_phases_states: dict[str, int],
-                  checkpoint_file: str,
-                  sumo_config: str,
-                  gui: bool):
+    def _make_env_static(turned_on_traffic_lights_ids: list[str],
+                         route_generator: RouteGenerator,
+                         transport_generator: TransportGenerator,
+                         step: int,
+                         unique_phases_states: dict[str, int],
+                         checkpoint_file: str,
+                         sumo_config: str,
+                         gui: bool):
         def _init():
             env = TrafficLightsStaticEnv(
                 turned_on_traffic_lights_ids,
@@ -110,6 +110,34 @@ class TrafficScheduler:
                 unique_phases_states,
                 checkpoint_file,
                 sumo_config,
+                gui)
+            flatten_env = FlattenObservation(env)
+            return flatten_env
+
+        return _init
+
+    @staticmethod
+    def _make_env_dynamic(turned_on_traffic_lights_ids: list[str],
+                          route_generator: RouteGenerator,
+                          transport_generator: TransportGenerator,
+                          step: int,
+                          unique_phases_states: dict[str, int],
+                          checkpoint_file: str,
+                          sumo_config: str,
+                          traffic_lights_groups: list[list[str]],
+                          n_lanes: int,
+                          gui: bool):
+        def _init():
+            env = TrafficLightsDynamicEnv(
+                turned_on_traffic_lights_ids,
+                route_generator,
+                transport_generator,
+                step,
+                unique_phases_states,
+                checkpoint_file,
+                sumo_config,
+                traffic_lights_groups,
+                n_lanes,
                 gui)
             flatten_env = FlattenObservation(env)
             return flatten_env
@@ -128,23 +156,34 @@ class TrafficScheduler:
         print(f"GROUPS: {self.__net.get_traffic_lights_groups()}")
         self.__generate_initial_traffic()
         turned_on_traffic_lights_ids = self.__net.get_turned_on_traffic_lights_ids()
+        traffic_lights_groups = self.__net.get_traffic_lights_groups()
+        n_lanes = self.__net.get_number_of_lanes()
         unique_phases_states = self.__get_unique_phases_dict(turned_on_traffic_lights_ids)
+        print(unique_phases_states)
         self.__learning_logger.print_info(Message.training_started)
         traci.simulation.saveState(self.__CHECKPOINT_CONFIG)
         traci.close()
-        vec_env = SubprocVecEnv([self._make_env(turned_on_traffic_lights_ids,
-                                                self.__route_generator,
-                                                self.__transport_generator,
-                                                self.__step,
-                                                unique_phases_states,
-                                                self.__CHECKPOINT_CONFIG,
-                                                self.__SUMO_CONFIG, i == 0) for i in range(self.__num_envs)])
+        # vec_env = SubprocVecEnv([self._make_env_static(turned_on_traffic_lights_ids,
+        #                                         self.__route_generator,
+        #                                         self.__transport_generator,
+        #                                         self.__step,
+        #                                         unique_phases_states,
+        #                                         self.__CHECKPOINT_CONFIG,
+        #                                         self.__SUMO_CONFIG, i == 0) for i in range(self.__num_envs)])
+        vec_env = SubprocVecEnv([self._make_env_dynamic(turned_on_traffic_lights_ids,
+                                                        self.__route_generator,
+                                                        self.__transport_generator,
+                                                        self.__step,
+                                                        unique_phases_states,
+                                                        self.__CHECKPOINT_CONFIG,
+                                                        self.__SUMO_CONFIG,
+                                                        traffic_lights_groups, n_lanes, i == 0) for i in range(self.__num_envs)])
         vec_env = VecNormalize(vec_env, norm_obs=True, norm_reward=True)
         model = A2C(policy='MlpPolicy',
                     env=vec_env,
                     tensorboard_log='./a2c_traffic_lights_tensorboard',
                     learning_rate=self.__learning_rate_schedule,
-                    n_steps=60,
+                    n_steps=600,
                     max_grad_norm=1.5,
                     normalize_advantage=True,
                     gae_lambda=0.9,

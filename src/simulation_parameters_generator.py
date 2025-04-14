@@ -66,7 +66,7 @@ def make_list_of_turned_off_traffic_lights(part_off_traffic_lights: float, net: 
 @click.option('--duration', '-d', type=int, default=1000000, help='Simulation duration in steps.\n')
 @click.option('--iterations', '-i', type=int, default=5, help='Number '
                                                                'of iterations of initial traffic generation.\n')
-@click.option('--part-generators', '-g', type=float, default=0.5, help='This part of the edges will act '
+@click.option('--part-generators', '-g', type=float, default=0.1, help='This part of the edges will act '
                                                                        'as flow generators.\n')
 @click.option('--file', '-f', type=str, default='./configs/simulation-parameters/simulation_parameters.json',
               help='path to simulation parameters config file (.sumocfg).\n')
@@ -78,7 +78,7 @@ def make_list_of_turned_off_traffic_lights(part_off_traffic_lights: float, net: 
 @click.option('--check-time', '-t', type=int, default=100, help='Check time (in simulation ticks) whether '
                                                                 'the traffic has traveled half of the total path in'
                                                                 'meters.\n')
-@click.option('--part-off-traffic-lights', '-t', default=0.2, type=float, help='This part of traffic lights '
+@click.option('--part-off-traffic-lights', '-t', default=0.0, type=float, help='This part of traffic lights '
                                                                                'will be turned off.\n')
 @click.option('--threshold-edge-length', '-e', default=200, type=int, help='Traffic lights will be installed every '
                                                                            '[--threshold-edge-length] value meters on each edge, '
