@@ -7,6 +7,7 @@ from sumolib.net import readNet
 from multiprocessing import Pool, cpu_count
 from facade.structures import NodePair
 from facade.logger.network_logger import *
+from collections import deque
 
 
 class Net:
@@ -30,7 +31,7 @@ class Net:
         (self.__restore_path_matrix, self.__restore_path_matrix_for_way_back_routes,
          self.__paths_for_way_back_routes) = {}, {}, {}
         self.__edges_dict = self.__make_edges_dict()
-        self.__turned_on_traffic_lights_ids = []
+        self.__turned_on_traffic_lights_ids, self.__traffic_lights_groups = [], []
         self.__paths = {}
         for edge in poisson_generators_edges:
             self.__poisson_generators_to_nodes.append(self.__sumolib_net.getEdge(edge).getToNode().getID())
@@ -42,7 +43,7 @@ class Net:
         self.__network_logger.step_progress_bar()
 
     @staticmethod
-    def _find_routes(start_node : str,
+    def _find_routes(start_node: str,
                      nodes: list[str],
                      graph: dict[str, dict[str, str]],
                      edges_dict: dict[str, NodePair],
@@ -313,6 +314,32 @@ class Net:
             path.append(edge)
         return path[::-1]
 
+    def make_traffic_lights_groups(self):
+        start_node = self.__nodes[0]
+        visited_nodes, current_group = set(), []
+        remain_tls = set(self.__turned_on_traffic_lights_ids)
+        visited_nodes.add(start_node)
+        if start_node in self.__turned_on_traffic_lights_ids:
+            current_group.append(start_node)
+        queue = deque([start_node])
+        while queue:
+            node = queue.popleft()
+            neighbors = list(self.__graph[node].items())
+            for neighbor_node, edge in neighbors:
+                if neighbor_node not in visited_nodes:
+                    visited_nodes.add(neighbor_node)
+                    queue.append(neighbor_node)
+                    if neighbor_node in self.__turned_on_traffic_lights_ids:
+                        current_group.append(neighbor_node)
+                    if len(current_group) == 4:
+                        remain_tls.difference_update(current_group)
+                        self.__traffic_lights_groups.append(current_group)
+                        current_group = []
+        if len(remain_tls) > 0:
+            print(
+                f"These traffic lights are not included in any of the groups: {remain_tls}. "
+                f"\nThey will not learn, they will use the default settings")
+
     def get_restore_path_matrix(self) -> dict[str, dict[str, str | None]]:
         return self.__restore_path_matrix
 
@@ -352,6 +379,9 @@ class Net:
 
     def get_turned_on_traffic_lights_ids(self):
         return self.__turned_on_traffic_lights_ids
+
+    def get_traffic_lights_groups(self):
+        return self.__traffic_lights_groups
 
     def get_shortest_path(self, start_node: str, end_node: str) -> list[str]:
         return self.__paths[start_node][end_node]

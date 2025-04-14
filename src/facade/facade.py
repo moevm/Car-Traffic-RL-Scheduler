@@ -124,6 +124,8 @@ class TrafficScheduler:
         sumo_cmd = ["sumo", "-c", self.__SUMO_CONFIG]
         traci.start(sumo_cmd)
         self.__net.turn_off_traffic_lights(self.__simulation_params.turned_off_traffic_lights)
+        self.__net.make_traffic_lights_groups()
+        print(f"GROUPS: {self.__net.get_traffic_lights_groups()}")
         self.__generate_initial_traffic()
         turned_on_traffic_lights_ids = self.__net.get_turned_on_traffic_lights_ids()
         unique_phases_states = self.__get_unique_phases_dict(turned_on_traffic_lights_ids)
@@ -161,6 +163,8 @@ class TrafficScheduler:
         sumo_cmd = ["sumo", "-c", self.__SUMO_CONFIG]
         traci.start(sumo_cmd)
         self.__net.turn_off_traffic_lights(self.__simulation_params.turned_off_traffic_lights)
+        self.__net.make_traffic_lights_groups()
+        print(f"GROUPS: {self.__net.get_traffic_lights_groups()}")
         self.__generate_initial_traffic()
         turned_on_traffic_lights_ids = self.__net.get_turned_on_traffic_lights_ids()
         tls_id = turned_on_traffic_lights_ids[0]
