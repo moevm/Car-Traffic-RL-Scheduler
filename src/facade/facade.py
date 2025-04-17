@@ -14,7 +14,7 @@ from facade.generation.transport_generator import TransportGenerator
 from facade.logger.logger import *
 from facade.net import Net
 from facade.structures import SimulationParams
-from stable_baselines3 import A2C
+from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize
 
 
@@ -121,7 +121,7 @@ class TrafficScheduler:
 
     @staticmethod
     def __learning_rate_schedule(progress: float) -> float:
-        return 0.00005 + (0.0005 - 0.00005) * progress
+        return 0.00003 + (0.0003 - 0.00003) * progress
 
     def learn(self):
         sumo_cmd = ["sumo", "-c", self.__SUMO_CONFIG]
@@ -147,24 +147,26 @@ class TrafficScheduler:
                                                         traffic_lights_groups, n_lanes, i == 0) for i in
                                  range(self.__num_envs)])
         vec_env = VecNormalize(vec_env, norm_obs=True, norm_reward=True)
-        model = A2C(policy='MlpPolicy',
+        model = PPO(policy='MlpPolicy',
                     env=vec_env,
-                    tensorboard_log='./a2c_traffic_lights_tensorboard',
+                    tensorboard_log='./ppo_traffic_lights_tensorboard',
                     learning_rate=self.__learning_rate_schedule,
-                    n_steps=60,
-                    max_grad_norm=1.5,
+                    n_steps=60 * len(traffic_lights_groups) * len(traffic_lights_groups[0]),
+                    batch_size=15 * len(traffic_lights_groups) * len(traffic_lights_groups[0]),
+                    max_grad_norm=0.5,
                     normalize_advantage=True,
-                    gae_lambda=0.9,
-                    ent_coef=0.01,
-                    vf_coef=0.3,
-                    device='cpu'
+                    gae_lambda=0.95,
+                    ent_coef=0.02,
+                    vf_coef=0.7,
+                    device='cuda'
                     )
         model.learn(total_timesteps=self.__simulation_params.DURATION,
                     progress_bar=True,
                     callback=TensorboardCallback(),
                     log_interval=1)
+        vec_env.save('vec_normalize.pkl')
         vec_env.close()
-        model.save('a2c_crossroad_4')
+        model.save('trained_model')
 
     def predict(self, path):
         sumo_cmd = ["sumo", "-c", self.__SUMO_CONFIG]

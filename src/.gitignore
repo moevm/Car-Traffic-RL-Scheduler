@@ -5,4 +5,5 @@ __pycache__/
 *.zip
 *.pyc
 a2c_traffic_lights_tensorboard/
+ppo_traffic_lights_tensorboard/
 ../pics/
