@@ -146,8 +146,8 @@ class Net:
                                   graph: dict[str, dict[str, str]],
                                   edges_length: dict[str, float]):
         distances = {node: inf for node in nodes}
-        distances[start_node] = 0
-        priority_queue = [(0, start_node, prev_node)]
+        distances[start_node] = 0.0
+        priority_queue = [(0.0, start_node, prev_node)]
         previous_nodes = {node: None for node in nodes}
         while priority_queue:
             current_distance, current_node, prev_node = heapq.heappop(priority_queue)

@@ -12,7 +12,7 @@ def main(sumo_config: str, simulation_parameters: str) -> None:
     """
     scheduler = TrafficScheduler(sumo_config, simulation_parameters)
     scheduler.learn()
-    #scheduler.predict('a2c_crossroad_4')
+    #scheduler.predict('trained_model')
     #scheduler.default_tls()
 
 if __name__ == "__main__":
