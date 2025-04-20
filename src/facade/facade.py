@@ -41,7 +41,7 @@ class TrafficScheduler:
         self.__step = 0
         self.__traffic_logger = Logger("[TrafficInfo]")
         self.__learning_logger = Logger("[LearningInfo]")
-        self.__num_envs = 6
+        self.__num_envs = 1
 
     def __extract_net_path(self) -> str:
         slash_position = self.__SUMO_CONFIG.rfind('/')
@@ -149,9 +149,9 @@ class TrafficScheduler:
                     env=vec_env,
                     tensorboard_log='./ppo_traffic_lights_tensorboard',
                     learning_rate=self.__learning_rate_schedule,
-                    n_steps=60 * len(traffic_lights_groups) * len(traffic_lights_groups[0]),
-                    batch_size=15 * len(traffic_lights_groups) * len(traffic_lights_groups[0]),
-                    max_grad_norm=0.5,
+                    n_steps=60 * len(traffic_lights_groups),
+                    batch_size=15 * len(traffic_lights_groups),
+                    max_grad_norm=1.0,
                     normalize_advantage=True,
                     gae_lambda=0.9,
                     ent_coef=0.05,
@@ -166,46 +166,47 @@ class TrafficScheduler:
         vec_env.close()
         model.save('trained_model')
 
-    def predict(self, path):
-        sumo_cmd = ["sumo", "-c", self.__SUMO_CONFIG]
-        traci.start(sumo_cmd)
-        self.__net.turn_off_traffic_lights(self.__simulation_params.turned_off_traffic_lights)
-        self.__net.make_traffic_lights_groups()
-        print(f"GROUPS: {self.__net.get_traffic_lights_groups()}")
-        self.__generate_initial_traffic()
-        turned_on_traffic_lights_ids = self.__net.get_turned_on_traffic_lights_ids()
-        traffic_lights_groups = self.__net.get_traffic_lights_groups()
-        n_lanes = self.__net.get_number_of_lanes() * 4
-        unique_phases_states = self.__get_unique_phases_dict(turned_on_traffic_lights_ids)
-        print(unique_phases_states)
-        self.__learning_logger.print_info(Message.training_started)
-        traci.simulation.saveState(self.__CHECKPOINT_CONFIG)
-        traci.close()
-        vec_env = DummyVecEnv([self._make_env_dynamic(turned_on_traffic_lights_ids,
-                                                        self.__route_generator,
-                                                        self.__transport_generator,
-                                                        self.__step,
-                                                        self.__CHECKPOINT_CONFIG,
-                                                        self.__SUMO_CONFIG,
-                                                        traffic_lights_groups, n_lanes, True)])
-        vec_env = VecNormalize.load('vec_normalize.pkl', vec_env)
-        vec_env.training, vec_env.norm_reward = False, False
-        model = PPO.load(path, env=vec_env, device='cpu')
-        model_env = model.get_env()
-        obs = model_env.reset()
-        total_capacity = 0
-        schedule = vec_env.venv.envs[0].unwrapped.get_schedule()
-        for i in range(10_000 * len(traffic_lights_groups)):
-            action, _states = model.predict(obs, deterministic=True)
-            obs, rewards, dones, info = model_env.step(action)
-            if all(dones):
-                print(f"all envs dones on i = {i}")
-                model_env.reset()
-            if i % len(traffic_lights_groups) == 0:
-                total_capacity += traci.simulation.getArrivedNumber()
-        print(f"total capacity using model = {total_capacity}")
-        model_env.close()
-        self.default_tls(schedule)
+    # def predict(self, path):
+    #     sumo_cmd = ["sumo", "-c", self.__SUMO_CONFIG]
+    #     traci.start(sumo_cmd)
+    #     self.__net.turn_off_traffic_lights(self.__simulation_params.turned_off_traffic_lights)
+    #     self.__net.make_traffic_lights_groups()
+    #     print(f"GROUPS: {self.__net.get_traffic_lights_groups()}")
+    #     self.__generate_initial_traffic()
+    #     turned_on_traffic_lights_ids = self.__net.get_turned_on_traffic_lights_ids()
+    #     traffic_lights_groups = self.__net.get_traffic_lights_groups()
+    #     n_lanes = self.__net.get_number_of_lanes() * 4
+    #     unique_phases_states = self.__get_unique_phases_dict(turned_on_traffic_lights_ids)
+    #     print(unique_phases_states)
+    #     self.__learning_logger.print_info(Message.training_started)
+    #     print(turned_on_traffic_lights_ids)
+    #     traci.simulation.saveState(self.__CHECKPOINT_CONFIG)
+    #     traci.close()
+    #     vec_env = DummyVecEnv([self._make_env_dynamic(turned_on_traffic_lights_ids,
+    #                                                     self.__route_generator,
+    #                                                     self.__transport_generator,
+    #                                                     self.__step,
+    #                                                     self.__CHECKPOINT_CONFIG,
+    #                                                     self.__SUMO_CONFIG,
+    #                                                     traffic_lights_groups, n_lanes, True)])
+    #     vec_env = VecNormalize.load('vec_normalize.pkl', vec_env)
+    #     vec_env.training, vec_env.norm_reward = False, False
+    #     model = PPO.load(path, env=vec_env, device='cpu')
+    #     model_env = model.get_env()
+    #     obs = model_env.reset()
+    #     total_capacity = 0
+    #     schedule = vec_env.venv.envs[0].unwrapped.get_schedule()
+    #     for i in range(10_000 * len(traffic_lights_groups)):
+    #         action, _states = model.predict(obs, deterministic=True)
+    #         obs, rewards, dones, info = model_env.step(action)
+    #         if all(dones):
+    #             print(f"all envs dones on i = {i}")
+    #             model_env.reset()
+    #         if i % len(traffic_lights_groups) == 0:
+    #             total_capacity += traci.simulation.getArrivedNumber()
+    #     print(f"total capacity using model = {total_capacity}")
+    #     model_env.close()
+    #     self.default_tls(schedule)
 
     def default_tls(self, schedule):
         sumo_cmd = ["sumo-gui", "-c", self.__SUMO_CONFIG]

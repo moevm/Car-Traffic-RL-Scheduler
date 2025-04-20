@@ -17,32 +17,35 @@ class TensorboardCallback(BaseCallback):
     def _on_step(self) -> bool:
         infos = self.locals["infos"]
         (reward, tls_reward, step_capacity, phase_capacity, halting_reward, group_reward, group_tls_reward,
-         group_step_capacity, group_phase_capacity, group_halting_reward) = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+         group_step_capacity, group_phase_capacity,
+         group_halting_reward) = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
         for i, info in enumerate(infos):
+            timestep_rewards = info["timestep_rewards"]
+            group_rewards = info["group_rewards"]
             self.__rollout_rewards[i] = self.__rollout_rewards[i] + (1 / (self.locals["n_steps"] + 1)) * (
-                    info["reward"] - self.__rollout_rewards[i])
+                    timestep_rewards["sum_reward"] - self.__rollout_rewards[i])
             self.__rollout_tls_rewards[i] = self.__rollout_tls_rewards[i] + (1 / (self.locals["n_steps"] + 1)) * (
-                    info["tls_reward"] - self.__rollout_tls_rewards[i])
+                    timestep_rewards["tls_reward"] - self.__rollout_tls_rewards[i])
             self.__rollout_step_capacity[i] = self.__rollout_step_capacity[i] + (1 / (self.locals["n_steps"] + 1)) * (
-                    info["step_capacity"] - self.__rollout_step_capacity[i])
+                    timestep_rewards["step_capacity"] - self.__rollout_step_capacity[i])
             self.__rollout_phase_capacity[i] = self.__rollout_phase_capacity[i] + (1 / (self.locals["n_steps"] + 1)) * (
-                    info["phase_capacity"] - self.__rollout_phase_capacity[i])
+                    timestep_rewards["phase_capacity"] - self.__rollout_phase_capacity[i])
             self.__rollout_halting_reward[i] = self.__rollout_halting_reward[i] + (1 / (self.locals["n_steps"] + 1)) * (
-                    info["halting_reward"] - self.__rollout_halting_reward[i])
-            reward = reward + (1 / len(infos)) * (info["reward"] - reward)
-            tls_reward = tls_reward + (1 / len(infos)) * (info["tls_reward"] - tls_reward)
-            step_capacity = step_capacity + (1 / len(infos)) * (info["step_capacity"] - step_capacity)
-            phase_capacity = phase_capacity + (1 / len(infos)) * (info["phase_capacity"] - phase_capacity)
-            halting_reward = halting_reward + (1 / len(infos)) * (info["halting_reward"] - halting_reward)
+                    timestep_rewards["halting_reward"] - self.__rollout_halting_reward[i])
+            reward = reward + (1 / len(infos)) * (timestep_rewards["sum_reward"] - reward)
+            tls_reward = tls_reward + (1 / len(infos)) * (timestep_rewards["tls_reward"] - tls_reward)
+            step_capacity = step_capacity + (1 / len(infos)) * (timestep_rewards["step_capacity"] - step_capacity)
+            phase_capacity = phase_capacity + (1 / len(infos)) * (timestep_rewards["phase_capacity"] - phase_capacity)
+            halting_reward = halting_reward + (1 / len(infos)) * (timestep_rewards["halting_reward"] - halting_reward)
 
-            group_reward = group_reward + (1 / len(infos)) * (info["group_reward"] - group_reward)
-            group_tls_reward = group_tls_reward + (1 / len(infos)) * (info["group_tls_reward"] - group_tls_reward)
+            group_reward = group_reward + (1 / len(infos)) * (group_rewards["sum_reward"] - group_reward)
+            group_tls_reward = group_tls_reward + (1 / len(infos)) * (group_rewards["tls_reward"] - group_tls_reward)
             group_step_capacity = group_step_capacity + (1 / len(infos)) * (
-                    info["group_step_capacity"] - group_step_capacity)
+                    group_rewards["step_capacity"] - group_step_capacity)
             group_phase_capacity = group_phase_capacity + (1 / len(infos)) * (
-                    info["group_phase_capacity"] - group_phase_capacity)
+                    group_rewards["phase_capacity"] - group_phase_capacity)
             group_halting_reward = group_halting_reward + (1 / len(infos)) * (
-                    info["group_halting_reward"] - group_halting_reward)
+                    group_rewards["halting_reward"] - group_halting_reward)
         self.__log_rewards(reward,
                            tls_reward,
                            step_capacity,

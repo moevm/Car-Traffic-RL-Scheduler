@@ -29,7 +29,7 @@ class TransportGenerator:
 
     def clean_vehicles_data(self):
         for arrived_vehicle_id in traci.simulation.getArrivedIDList():
-            del self.__vehicles_data[arrived_vehicle_id]
+            self.__vehicles_data.pop(arrived_vehicle_id, None)
 
     @staticmethod
     def __generate_color() -> (int, int, int):
