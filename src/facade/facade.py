@@ -6,7 +6,8 @@ import traci
 from gymnasium.utils.env_checker import check_env
 from gymnasium.wrappers import FlattenObservation, NormalizeReward, NormalizeObservation
 from stable_baselines3.common.evaluation import evaluate_policy
-
+from stable_baselines3.common.utils import get_schedule_fn
+from sb3_contrib import RecurrentPPO
 from facade.environment.tensorboard_callback import TensorboardCallback
 from facade.environment.traffic_lights_dynamic_env import TrafficLightsDynamicEnv
 from facade.generation.route_generator import RouteGenerator
@@ -41,7 +42,7 @@ class TrafficScheduler:
         self.__step = 0
         self.__traffic_logger = Logger("[TrafficInfo]")
         self.__learning_logger = Logger("[LearningInfo]")
-        self.__num_envs = 1
+        self.__num_envs = 6
 
     def __extract_net_path(self) -> str:
         slash_position = self.__SUMO_CONFIG.rfind('/')
@@ -114,14 +115,13 @@ class TrafficScheduler:
                 traffic_lights_groups,
                 n_lanes,
                 gui)
-            flatten_env = FlattenObservation(env)
-            return flatten_env
+            return env
 
         return _init
 
     @staticmethod
     def __learning_rate_schedule(progress: float) -> float:
-        return 0.00003 + (0.0003 - 0.00003) * progress
+        return 0.00006 + (0.0003 - 0.00006) * progress
 
     def learn(self):
         sumo_cmd = ["sumo", "-c", self.__SUMO_CONFIG]
@@ -129,6 +129,7 @@ class TrafficScheduler:
         self.__net.turn_off_traffic_lights(self.__simulation_params.turned_off_traffic_lights)
         self.__net.make_traffic_lights_groups()
         print(f"GROUPS: {self.__net.get_traffic_lights_groups()}")
+        print(f"len_groups = {len(self.__net.get_traffic_lights_groups())}")
         self.__generate_initial_traffic()
         turned_on_traffic_lights_ids = self.__net.get_turned_on_traffic_lights_ids()
         traffic_lights_groups = self.__net.get_traffic_lights_groups()
@@ -142,10 +143,11 @@ class TrafficScheduler:
                                                         self.__step,
                                                         self.__CHECKPOINT_CONFIG,
                                                         self.__SUMO_CONFIG,
-                                                        traffic_lights_groups, n_lanes, i == 0) for i in
+                                                        traffic_lights_groups, n_lanes, False) for i in
                                  range(self.__num_envs)])
-        vec_env = VecNormalize(vec_env, norm_obs=True, norm_reward=True)
-        model = PPO(policy='MlpPolicy',
+        vec_env = VecNormalize(vec_env, norm_obs=True, norm_reward=True,
+                               norm_obs_keys=["density", "waiting", "time"])
+        model = RecurrentPPO(policy='MultiInputLstmPolicy',
                     env=vec_env,
                     tensorboard_log='./ppo_traffic_lights_tensorboard',
                     learning_rate=self.__learning_rate_schedule,
@@ -153,13 +155,13 @@ class TrafficScheduler:
                     batch_size=15 * len(traffic_lights_groups),
                     max_grad_norm=1.0,
                     normalize_advantage=True,
-                    gae_lambda=0.9,
-                    ent_coef=0.05,
-                    vf_coef=0.25,
+                    gae_lambda=0.98,
+                    ent_coef=0.005,
+                    vf_coef=0.5,
                     device='cuda'
                     )
         model.learn(total_timesteps=self.__simulation_params.DURATION,
-                    progress_bar=False,
+                    progress_bar=True,
                     callback=TensorboardCallback(),
                     log_interval=1)
         vec_env.save('vec_normalize.pkl')

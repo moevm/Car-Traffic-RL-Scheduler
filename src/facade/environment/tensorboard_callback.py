@@ -8,90 +8,83 @@ class TensorboardCallback(BaseCallback):
         super().__init__(verbose)
 
     def _on_rollout_start(self) -> None:
+        self.__rollout_normalized_rewards = np.zeros(shape=(self.training_env.num_envs,), dtype=np.float32)
         self.__rollout_rewards = np.zeros(shape=(self.training_env.num_envs,), dtype=np.float32)
-        self.__rollout_tls_rewards = np.zeros(shape=(self.training_env.num_envs,), dtype=np.float32)
         self.__rollout_step_capacity = np.zeros(shape=(self.training_env.num_envs,), dtype=np.float32)
         self.__rollout_phase_capacity = np.zeros(shape=(self.training_env.num_envs,), dtype=np.float32)
-        self.__rollout_halting_reward = np.zeros(shape=(self.training_env.num_envs,), dtype=np.float32)
+        self.__rollout_reward_ratio = np.zeros(shape=(self.training_env.num_envs,), dtype=np.float32)
 
     def _on_step(self) -> bool:
         infos = self.locals["infos"]
-        (reward, tls_reward, step_capacity, phase_capacity, halting_reward, group_reward, group_tls_reward,
-         group_step_capacity, group_phase_capacity,
-         group_halting_reward) = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+        (reward, step_capacity, phase_capacity, group_reward, group_step_capacity,
+         group_phase_capacity, reward_ratio, group_reward_ratio) = (
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
         for i, info in enumerate(infos):
             timestep_rewards = info["timestep_rewards"]
             group_rewards = info["group_rewards"]
             self.__rollout_rewards[i] = self.__rollout_rewards[i] + (1 / (self.locals["n_steps"] + 1)) * (
                     timestep_rewards["sum_reward"] - self.__rollout_rewards[i])
-            self.__rollout_tls_rewards[i] = self.__rollout_tls_rewards[i] + (1 / (self.locals["n_steps"] + 1)) * (
-                    timestep_rewards["tls_reward"] - self.__rollout_tls_rewards[i])
             self.__rollout_step_capacity[i] = self.__rollout_step_capacity[i] + (1 / (self.locals["n_steps"] + 1)) * (
                     timestep_rewards["step_capacity"] - self.__rollout_step_capacity[i])
             self.__rollout_phase_capacity[i] = self.__rollout_phase_capacity[i] + (1 / (self.locals["n_steps"] + 1)) * (
                     timestep_rewards["phase_capacity"] - self.__rollout_phase_capacity[i])
-            self.__rollout_halting_reward[i] = self.__rollout_halting_reward[i] + (1 / (self.locals["n_steps"] + 1)) * (
-                    timestep_rewards["halting_reward"] - self.__rollout_halting_reward[i])
+            self.__rollout_reward_ratio[i] = self.__rollout_reward_ratio[i] + (1 / (self.locals["n_steps"] + 1)) * (
+                    timestep_rewards["reward_ratio"] - self.__rollout_reward_ratio[i])
+
             reward = reward + (1 / len(infos)) * (timestep_rewards["sum_reward"] - reward)
-            tls_reward = tls_reward + (1 / len(infos)) * (timestep_rewards["tls_reward"] - tls_reward)
             step_capacity = step_capacity + (1 / len(infos)) * (timestep_rewards["step_capacity"] - step_capacity)
             phase_capacity = phase_capacity + (1 / len(infos)) * (timestep_rewards["phase_capacity"] - phase_capacity)
-            halting_reward = halting_reward + (1 / len(infos)) * (timestep_rewards["halting_reward"] - halting_reward)
+            reward_ratio = reward_ratio + (1 / len(infos)) * (timestep_rewards["reward_ratio"] - reward_ratio)
 
             group_reward = group_reward + (1 / len(infos)) * (group_rewards["sum_reward"] - group_reward)
-            group_tls_reward = group_tls_reward + (1 / len(infos)) * (group_rewards["tls_reward"] - group_tls_reward)
             group_step_capacity = group_step_capacity + (1 / len(infos)) * (
                     group_rewards["step_capacity"] - group_step_capacity)
             group_phase_capacity = group_phase_capacity + (1 / len(infos)) * (
                     group_rewards["phase_capacity"] - group_phase_capacity)
-            group_halting_reward = group_halting_reward + (1 / len(infos)) * (
-                    group_rewards["halting_reward"] - group_halting_reward)
+            group_reward_ratio = group_reward_ratio + (1 / len(infos)) * (
+                    group_rewards["reward_ratio"] - group_reward_ratio)
+        self.__rollout_normalized_rewards = self.__rollout_normalized_rewards + (1 / (self.locals["n_steps"] + 1)) * (
+                    self.locals["rewards"] - self.__rollout_normalized_rewards)
         self.__log_rewards(reward,
-                           tls_reward,
                            step_capacity,
                            phase_capacity,
-                           halting_reward,
+                           reward_ratio,
                            group_reward,
-                           group_tls_reward,
                            group_step_capacity,
                            group_phase_capacity,
-                           group_halting_reward)
+                           group_reward_ratio)
         self.__log_norms()
         return True
 
     def _on_rollout_end(self) -> None:
+        mean_normalized_reward = np.mean(self.__rollout_normalized_rewards)
         mean_rollout_reward = np.mean(self.__rollout_rewards)
-        mean_rollout_tls_reward = np.mean(self.__rollout_tls_rewards)
         mean_rollout_step_capacity = np.mean(self.__rollout_step_capacity)
         mean_rollout_phase_capacity = np.mean(self.__rollout_phase_capacity)
-        mean_rollout_halting_reward = np.mean(self.__rollout_halting_reward)
+        mean_rollout_reward_ratio = np.mean(self.__rollout_reward_ratio)
+        self.logger.record("rollout/mean_normalized_reward", mean_normalized_reward)
         self.logger.record("rollout/mean_reward", mean_rollout_reward)
-        self.logger.record("rollout/mean_tls_reward", mean_rollout_tls_reward)
         self.logger.record("rollout/mean_step_capacity", mean_rollout_step_capacity)
         self.logger.record("rollout/mean_phase_capacity", mean_rollout_phase_capacity)
-        self.logger.record("rollout/mean_halting_reward", mean_rollout_halting_reward)
+        self.logger.record("rollout/mean_reward_ratio", mean_rollout_reward_ratio)
 
     def __log_rewards(self, reward: float,
-                      tls_reward: float,
                       step_capacity: float,
                       phase_capacity: float,
-                      halting_reward: float,
+                      reward_ratio: float,
                       group_reward: float,
-                      group_tls_reward: float,
                       group_step_capacity: float,
                       group_phase_capacity: float,
-                      group_halting_reward: float) -> None:
+                      group_reward_ratio: float) -> None:
         self.logger.record("step/reward", reward)
-        self.logger.record("step/tls_reward", tls_reward)
         self.logger.record("step/step_capacity", step_capacity)
         self.logger.record("step/phase_capacity", phase_capacity)
-        self.logger.record("step/halting_reward", halting_reward)
+        self.logger.record("step/reward_ratio", reward_ratio)
 
         self.logger.record("step/group_reward", group_reward)
-        self.logger.record("step/group_tls_reward", group_tls_reward)
         self.logger.record("step/group_step_capacity", group_step_capacity)
         self.logger.record("step/group_phase_capacity", group_phase_capacity)
-        self.logger.record("step/group_halting_reward", group_halting_reward)
+        self.logger.record("step/group_reward_ratio", group_reward_ratio)
 
     def __log_norms(self) -> None:
         total_policy_norm = 0.0
