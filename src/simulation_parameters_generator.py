@@ -23,18 +23,21 @@ def extract_net_config(sumo_config):
 
 def generate_poisson_generators(part_generators: float, net: Net) -> list:
     sumolib_net = net.get_sumolib_net()
-    possible_edges = []
-    possible_nodes = set()
+    possible_edges, required_edges = [], []
     edges = net.get_edges()
     network_logger = NetworkLogger()
-    n_generators = int(part_generators * len(edges))
-    network_logger.init_progress_bar(Message.search_for_valid_edges, n_generators)
     random.shuffle(edges)
-    for i, edge, in enumerate(edges):
+    remain_edges = edges.copy()
+    for i, edge in enumerate(edges):
+        from_node = sumolib_net.getEdge(edge).getFromNode().getID()
+        if len(sumolib_net.getNode(from_node).getOutgoing()) == 1:
+            required_edges.append(edge)
+            remain_edges.remove(edge)
+    n_generators = int(part_generators * len(remain_edges))
+    network_logger.init_progress_bar(Message.search_for_valid_edges, n_generators)
+    for i, edge in enumerate(remain_edges):
         to_node = sumolib_net.getEdge(edge).getToNode().getID()
-        if ((sumolib_net.getEdge(edge).getToNode().getID() not in possible_nodes)
-                and (len(sumolib_net.getNode(to_node).getOutgoing()) > 1)):
-            # possible_nodes.add(sumolib_net.getEdge(edge).getToNode().getID())
+        if len(sumolib_net.getNode(to_node).getOutgoing()) > 1:
             possible_edges.append(edge)
             network_logger.step_progress_bar()
         if len(possible_edges) == n_generators:
@@ -44,8 +47,9 @@ def generate_poisson_generators(part_generators: float, net: Net) -> list:
         print(
             "Number of Poisson generators is greater than number of possible edges. The number of Poisson generators will be "
             "set equal to the number of possible edges in the graph.")
-        n_generators = len(possible_edges)
-    return possible_edges[:n_generators]
+    generators = required_edges + possible_edges
+    random.shuffle(generators)
+    return generators
 
 
 def make_list_of_turned_off_traffic_lights(part_off_traffic_lights: float, net: Net) -> list[str]:
@@ -65,9 +69,10 @@ def make_list_of_turned_off_traffic_lights(part_off_traffic_lights: float, net: 
 @click.command()
 @click.option('--duration', '-d', type=int, default=1000000, help='Simulation duration in steps.\n')
 @click.option('--iterations', '-i', type=int, default=5, help='Number '
-                                                               'of iterations of initial traffic generation.\n')
-@click.option('--part-generators', '-g', type=float, default=0.1, help='This part of the edges will act '
-                                                                       'as flow generators.\n')
+                                                              'of iterations of initial traffic generation.\n')
+@click.option('--part-generators', '-g', type=float, default=0.1, help='This part of non-extreme edges will act '
+                                                                       'as flow generators. Extreme edges act as '
+                                                                       'flow generators by default.\n')
 @click.option('--file', '-f', type=str, default='./configs/simulation-parameters/simulation_parameters.json',
               help='path to simulation parameters config file (.sumocfg).\n')
 @click.option('--init-delay', '-n', type=int, default=10, help='Delay between vehicle departures during map '

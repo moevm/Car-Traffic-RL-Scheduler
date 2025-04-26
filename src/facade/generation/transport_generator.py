@@ -26,7 +26,6 @@ class TransportGenerator:
                 traci.vehicle.add(routes_ids[i], routes_ids[i])
                 traci.vehicle.setColor(routes_ids[i], self.__generate_color())
                 self.__vehicles_data[str(routes_ids[i])] = last_target_node_data.path_length_meters[-1]
-
     def clean_vehicles_data(self):
         for arrived_vehicle_id in traci.simulation.getArrivedIDList():
             self.__vehicles_data.pop(arrived_vehicle_id, None)
