@@ -38,45 +38,47 @@ class Net:
             self.__poisson_generators_from_nodes.append(self.__sumolib_net.getEdge(edge).getFromNode().getID())
         self.__poisson_generators_edges = poisson_generators_edges
 
-    def __callback_find_routes(self, response):
+    def __callback_find_routes(self, response: dict[tuple[str, Optional[str]], dict[str, list[str]]]):
         self.__paths.update(response)
         self.__network_logger.step_progress_bar()
 
     @staticmethod
-    def _find_routes(start_node: str,
+    def _find_routes(from_node: Optional[str],
+                     to_node: str,
                      nodes: list[str],
                      graph: dict[str, dict[str, str]],
                      edges_dict: dict[str, NodePair],
-                     restore_path_matrix: dict[str, dict[str, str]],
+                     restore_path_matrix: dict[tuple[str, Optional[str]], dict[str, Optional[str]]],
                      paths_for_way_back_routes: dict[str, list[str]],
-                     restore_path_matrix_for_way_back_routes: dict[str, dict[str, str]],
-                     connecting_edge=None
-                     ) -> dict[str, dict[str, list[str]]]:
+                     restore_path_matrix_for_way_back_routes: dict[tuple[str, None], dict[str, str]],
+                     connecting_edge=Optional[str]
+                     ) -> dict[tuple[str, Optional[str]], dict[str, list[str]]]:
         local_paths = {}
         for j in range(len(nodes)):
-            if start_node != nodes[j]:
-                path = Net._get_shortest_path(start_node,
-                                              nodes[j],
-                                              graph,
-                                              edges_dict,
-                                              restore_path_matrix,
-                                              paths_for_way_back_routes,
-                                              restore_path_matrix_for_way_back_routes)
+            if to_node != nodes[j]:
+                path = Net._restore_shortest_path(from_node,
+                                                  to_node,
+                                                  nodes[j],
+                                                  graph,
+                                                  edges_dict,
+                                                  restore_path_matrix,
+                                                  paths_for_way_back_routes,
+                                                  restore_path_matrix_for_way_back_routes)
                 if connecting_edge is not None:
                     path.insert(0, connecting_edge)
-                if start_node not in local_paths:
-                    local_paths[start_node] = {nodes[j]: path}
+                if (to_node, from_node) not in local_paths.keys():
+                    local_paths[(to_node, from_node)] = {nodes[j]: path}
                 else:
-                    local_paths[start_node][nodes[j]] = path
+                    local_paths[(to_node, from_node)][nodes[j]] = path
         return local_paths
 
     def parallel_find_routes(self) -> None:
-        start_nodes = self.__extreme_nodes + self.__poisson_generators_to_nodes
-        self.__network_logger.init_progress_bar(Message.find_all_routes, len(start_nodes))
+        to_nodes = self.__extreme_nodes + self.__poisson_generators_to_nodes
         args_list = []
-        for i, start_node in enumerate(start_nodes):
+        for i, to_node in enumerate(to_nodes):
             if i >= len(self.__extreme_nodes):
-                args = (start_node,
+                args = (self.__poisson_generators_from_nodes[i - len(self.__extreme_nodes)],
+                        to_node,
                         self.__nodes,
                         self.__graph,
                         self.__edges_dict,
@@ -85,7 +87,8 @@ class Net:
                         self.__restore_path_matrix_for_way_back_routes,
                         self.__poisson_generators_edges[i - len(self.__extreme_nodes)])
             else:
-                args = (start_node,
+                args = (None,
+                        to_node,
                         self.__nodes,
                         self.__graph,
                         self.__edges_dict,
@@ -94,10 +97,10 @@ class Net:
                         self.__restore_path_matrix_for_way_back_routes,
                         None)
             args_list.append(args)
+        self.__network_logger.init_progress_bar(Message.find_all_routes, len(to_nodes))
         with Pool(cpu_count() * self.__CPU_SCALE) as p:
             for args in args_list:
-                p.apply_async(Net._find_routes, args,
-                              callback=self.__callback_find_routes)
+                p.apply_async(Net._find_routes, args, callback=self.__callback_find_routes, error_callback=Net._error_3)
             p.close()
             p.join()
         self.__network_logger.destroy_progress_bar()
@@ -114,14 +117,14 @@ class Net:
             if is_on_traffic_light:
                 self.__turned_on_traffic_lights_ids.append(traffic_light_id)
 
-    def __callback_make_restore_path_matrix(self, response: tuple[str, dict[str, str]]) -> None:
-        start_node, previous_nodes = response
-        self.__restore_path_matrix[start_node] = previous_nodes
+    def __callback_make_restore_path_matrix(self,
+                                            response: tuple[str, Optional[str], dict[str, Optional[str]]]) -> None:
+        start_node, prev_node, previous_nodes = response
+        self.__restore_path_matrix[(start_node, prev_node)] = previous_nodes
         self.__network_logger.step_progress_bar()
 
     def parallel_make_restore_path_matrix(self) -> None:
         start_nodes = self.__extreme_nodes + self.__poisson_generators_to_nodes
-        self.__network_logger.init_progress_bar(Message.init_restore_path_matrix, len(start_nodes))
         args_list = []
         for i, start_node in enumerate(start_nodes):
             if i < len(self.__extreme_nodes):
@@ -130,10 +133,11 @@ class Net:
                 prev_node = self.__poisson_generators_from_nodes[i - len(self.__extreme_nodes)]
                 args = (start_node, prev_node, self.__INF, self.__nodes, self.__graph, self.__edges_length)
             args_list.append(args)
+        self.__network_logger.init_progress_bar(Message.init_restore_path_matrix, len(start_nodes))
         with Pool(cpu_count() * self.__CPU_SCALE) as p:
             for args in args_list:
-                p.apply_async(Net._make_restore_path_matrix, args,
-                              callback=self.__callback_make_restore_path_matrix)
+                p.apply_async(Net._make_restore_path_matrix, args, callback=self.__callback_make_restore_path_matrix,
+                              error_callback=self._error_1)
             p.close()
             p.join()
         self.__network_logger.destroy_progress_bar()
@@ -144,7 +148,9 @@ class Net:
                                   inf: float,
                                   nodes: list[str],
                                   graph: dict[str, dict[str, str]],
-                                  edges_length: dict[str, float]):
+                                  edges_length: dict[str, float]) -> tuple[
+        str, Optional[str], dict[str, Optional[str]]]:
+        fixed_prev_node = prev_node
         distances = {node: inf for node in nodes}
         distances[start_node] = 0.0
         priority_queue = [(0.0, start_node, prev_node)]
@@ -162,18 +168,19 @@ class Net:
                         distances[neighbor_node] = distance
                         previous_nodes[neighbor_node] = current_node
                         heapq.heappush(priority_queue, (distance, neighbor_node, current_node))
-        return start_node, previous_nodes
+        return start_node, fixed_prev_node, previous_nodes
 
-    def __callback_make_restore_path_matrix_for_way_back_routes(self, response: tuple[str, dict[str, str]]):
-        start_node, previous_nodes = response
-        self.__restore_path_matrix_for_way_back_routes[start_node] = previous_nodes
+    def __callback_make_restore_path_matrix_for_way_back_routes(self, response: tuple[
+        str, None, dict[str, Optional[str]]]):
+        start_node, prev_node, previous_nodes = response
+        self.__restore_path_matrix_for_way_back_routes[(start_node, prev_node)] = previous_nodes
         self.__network_logger.step_progress_bar()
 
     def __parallel_make_restore_path_matrix_for_way_back_routes(self, start_nodes: list[str]) -> None:
         self.__network_logger.init_progress_bar(Message.init_restore_path_matrix_for_cycles, len(start_nodes))
         args_list = []
-        for start_node in start_nodes:
-            args = (start_node, None, self.__INF, self.__nodes, self.__graph, self.__edges_length)
+        for to_node in start_nodes:
+            args = (to_node, None, self.__INF, self.__nodes, self.__graph, self.__edges_length)
             args_list.append(args)
         with Pool(cpu_count() * self.__CPU_SCALE) as p:
             for args in args_list:
@@ -183,46 +190,60 @@ class Net:
             p.join()
         self.__network_logger.destroy_progress_bar()
 
-    def __callback_for_find_way_back(self, response: tuple[str, list[str]]) -> None:
-        to_node, path = response
-        self.__paths_for_way_back_routes[to_node] = path
+    def __callback_for_find_way_back(self, response: tuple[str, str, list[str]]) -> None:
+        to_node, from_node, path = response
+        self.__paths_for_way_back_routes[(to_node, from_node)] = path
         self.__network_logger.step_progress_bar()
 
     @staticmethod
-    def _error(e):
-        print(e)
+    def _error_1(e):
+        print(f"ERROR 1 {e}")
 
-    def parallel_find_way_back(self):
-        self.__network_logger.init_progress_bar(Message.find_way_back_paths, len(self.__poisson_generators_to_nodes))
+    @staticmethod
+    def _error_2(e):
+        print(f"ERROR 2 {e}")
+
+    @staticmethod
+    def _error_3(e):
+        print(f"ERROR 3 {e}")
+
+    def parallel_find_way_back(self) -> None:
         args_list = []
         for i, to_node in enumerate(self.__poisson_generators_to_nodes):
             args = (self.__poisson_generators_from_nodes[i], to_node, self.__graph,
                     self.__restore_path_matrix, self.__edges_dict)
             args_list.append(args)
+        self.__network_logger.init_progress_bar(Message.find_way_back_paths, len(self.__poisson_generators_to_nodes))
         with Pool(cpu_count() * self.__CPU_SCALE) as p:
             for args in args_list:
                 p.apply_async(Net._find_way_back, args=args, callback=self.__callback_for_find_way_back,
-                              error_callback=Net._error)
+                              error_callback=Net._error_2)
             p.close()
             p.join()
         self.__network_logger.destroy_progress_bar()
-        intersection_nodes = list(self.__paths_for_way_back_routes.keys())
-        self.__parallel_make_restore_path_matrix_for_way_back_routes(intersection_nodes)
+        unique_intersection_nodes = set()
+        for node_pair, path in self.__paths_for_way_back_routes.items():
+            if len(path) > 0:
+                intersection_node = self.__edges_dict[path[-1]].node_to
+                unique_intersection_nodes.add(intersection_node)
+            else:
+                unique_intersection_nodes.add(node_pair[0])
+        self.__parallel_make_restore_path_matrix_for_way_back_routes(list(unique_intersection_nodes))
 
     @staticmethod
     def _find_way_back(from_node: str,
                        to_node: str,
                        graph: dict[str, dict[str, str]],
-                       restore_path_matrix: dict[str, dict[str, str]],
-                       edges_dict: dict[str, NodePair]):
-        intersection_node = Net.find_intersection(from_node, to_node, graph)
-        path = Net._get_shortest_path(to_node, intersection_node, graph, edges_dict, restore_path_matrix)
-        return to_node, path
+                       restore_path_matrix: dict[tuple[str, Optional[str]], dict[str, Optional[str]]],
+                       edges_dict: dict[str, NodePair]) -> tuple[str, str, list[str]]:
+        intersection_node = Net._find_intersection(from_node, to_node, graph)
+        path = Net._restore_shortest_path(from_node, to_node, intersection_node, graph, edges_dict, restore_path_matrix)
+        return to_node, from_node, path
 
     @staticmethod
-    def find_intersection(from_node: str,
-                          to_node: str,
-                          graph: dict[str, dict[str, str]]):
+    def _find_intersection(from_node: str,
+                           to_node: str,
+                           graph: dict[str, dict[str, str]]):
         current_node = to_node
         prev_node = from_node
         while len(graph[current_node]) < 3:
@@ -280,34 +301,34 @@ class Net:
         return extreme_nodes
 
     @staticmethod
-    def _get_shortest_path(start_node: str,
-                           end_node: str,
-                           graph: dict[str, dict[str, str]],
-                           edges_dict: dict[str, NodePair],
-                           restore_path_matrix=None,
-                           paths_for_way_back_routes=None,
-                           restore_path_matrix_for_way_back_routes=None) -> list[str]:
-        previous_nodes = restore_path_matrix[start_node]
+    def _restore_shortest_path(from_node: Optional[str],
+                               to_node: str,
+                               end_node: str,
+                               graph: dict[str, dict[str, str]],
+                               edges_dict: dict[str, NodePair],
+                               restore_path_matrix=None,
+                               paths_for_way_back_routes=None,
+                               restore_path_matrix_for_way_back_routes=None) -> list[str]:
+        previous_nodes = restore_path_matrix[(to_node, from_node)]
         path = []
         node = end_node
-        while node != start_node:
+        while node != to_node:
             node_1 = node
             node_2 = previous_nodes[node_1]
-            if (node_2 is None) and (restore_path_matrix is not None):
-                return []
-            elif (node_2 is None) and (restore_path_matrix is None):
-                way_back_route = paths_for_way_back_routes[start_node]
+            if node_2 is None:
+                way_back_route = paths_for_way_back_routes[(to_node, from_node)]
                 if not way_back_route:
-                    intersection_node = start_node
+                    intersection_node = to_node
                 else:
                     intersection_node = edges_dict[way_back_route[-1]].node_to
-                path_from_intersection_node_to_end_node = Net._get_shortest_path(intersection_node,
-                                                                                 end_node,
-                                                                                 graph,
-                                                                                 edges_dict,
-                                                                                 restore_path_matrix_for_way_back_routes,
-                                                                                 None,
-                                                                                 None)
+                path_from_intersection_node_to_end_node = Net._restore_shortest_path(None,
+                                                                                     intersection_node,
+                                                                                     end_node,
+                                                                                     graph,
+                                                                                     edges_dict,
+                                                                                     restore_path_matrix_for_way_back_routes,
+                                                                                     None,
+                                                                                     None)
                 return way_back_route + path_from_intersection_node_to_end_node
             edge = graph[node_2][node_1]
             node = node_2
@@ -383,8 +404,8 @@ class Net:
     def get_traffic_lights_groups(self):
         return self.__traffic_lights_groups
 
-    def get_shortest_path(self, start_node: str, end_node: str) -> list[str]:
-        return self.__paths[start_node][end_node]
+    def get_shortest_path(self, start_node: str, prev_node: Optional[str], end_node: str) -> list[str]:
+        return self.__paths[(start_node, prev_node)][end_node]
 
     def get_number_of_lanes(self):
         edge = self.__edges[0]

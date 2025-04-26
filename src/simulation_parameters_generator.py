@@ -34,7 +34,7 @@ def generate_poisson_generators(part_generators: float, net: Net) -> list:
         to_node = sumolib_net.getEdge(edge).getToNode().getID()
         if ((sumolib_net.getEdge(edge).getToNode().getID() not in possible_nodes)
                 and (len(sumolib_net.getNode(to_node).getOutgoing()) > 1)):
-            possible_nodes.add(sumolib_net.getEdge(edge).getToNode().getID())
+            # possible_nodes.add(sumolib_net.getEdge(edge).getToNode().getID())
             possible_edges.append(edge)
             network_logger.step_progress_bar()
         if len(possible_edges) == n_generators:

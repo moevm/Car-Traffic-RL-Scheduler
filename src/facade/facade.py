@@ -42,7 +42,7 @@ class TrafficScheduler:
         self.__step = 0
         self.__traffic_logger = Logger("[TrafficInfo]")
         self.__learning_logger = Logger("[LearningInfo]")
-        self.__num_envs = 6
+        self.__num_envs = 4
 
     def __extract_net_path(self) -> str:
         slash_position = self.__SUMO_CONFIG.rfind('/')
@@ -121,7 +121,7 @@ class TrafficScheduler:
 
     @staticmethod
     def __learning_rate_schedule(progress: float) -> float:
-        return 0.00006 + (0.0003 - 0.00006) * progress
+        return 0.00003 + (0.0003 - 0.00003) * progress
 
     def learn(self):
         sumo_cmd = ["sumo", "-c", self.__SUMO_CONFIG]
@@ -143,7 +143,7 @@ class TrafficScheduler:
                                                         self.__step,
                                                         self.__CHECKPOINT_CONFIG,
                                                         self.__SUMO_CONFIG,
-                                                        traffic_lights_groups, n_lanes, False) for i in
+                                                        traffic_lights_groups, n_lanes, i == 0) for i in
                                  range(self.__num_envs)])
         vec_env = VecNormalize(vec_env, norm_obs=True, norm_reward=True,
                                norm_obs_keys=["density", "waiting", "time"])

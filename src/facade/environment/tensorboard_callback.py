@@ -6,6 +6,8 @@ from stable_baselines3.common.callbacks import BaseCallback
 class TensorboardCallback(BaseCallback):
     def __init__(self, verbose=0):
         super().__init__(verbose)
+        self.__abs_max_ratio = float("-inf")
+        self.__abs_max_diff = float("-inf")
 
     def _on_rollout_start(self) -> None:
         self.__rollout_normalized_rewards = np.zeros(shape=(self.training_env.num_envs,), dtype=np.float32)
@@ -43,8 +45,13 @@ class TensorboardCallback(BaseCallback):
                     group_rewards["phase_capacity"] - group_phase_capacity)
             group_reward_ratio = group_reward_ratio + (1 / len(infos)) * (
                     group_rewards["reward_ratio"] - group_reward_ratio)
+            if group_rewards["step_capacity"] != 0 and abs(group_rewards["phase_capacity"] / group_rewards[
+                "step_capacity"]) > self.__abs_max_ratio:
+                self.__abs_max_ratio = abs(group_rewards["phase_capacity"] / group_rewards["step_capacity"])
+            if abs(group_rewards["phase_capacity"] - group_rewards["step_capacity"]) > self.__abs_max_diff:
+                self.__abs_max_diff = abs(group_rewards["phase_capacity"] - group_rewards["step_capacity"])
         self.__rollout_normalized_rewards = self.__rollout_normalized_rewards + (1 / (self.locals["n_steps"] + 1)) * (
-                    self.locals["rewards"] - self.__rollout_normalized_rewards)
+                self.locals["rewards"] - self.__rollout_normalized_rewards)
         self.__log_rewards(reward,
                            step_capacity,
                            phase_capacity,
@@ -67,6 +74,8 @@ class TensorboardCallback(BaseCallback):
         self.logger.record("rollout/mean_step_capacity", mean_rollout_step_capacity)
         self.logger.record("rollout/mean_phase_capacity", mean_rollout_phase_capacity)
         self.logger.record("rollout/mean_reward_ratio", mean_rollout_reward_ratio)
+        self.logger.record("rollout/max_ratio", self.__abs_max_ratio)
+        self.logger.record("rollout/max_diff", self.__abs_max_diff)
 
     def __log_rewards(self, reward: float,
                       step_capacity: float,

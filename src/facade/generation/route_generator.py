@@ -76,19 +76,22 @@ class RouteGenerator:
             start_nodes = self.__extreme_nodes.copy()
         else:
             start_nodes = [traci.edge.getToJunction(edge) for edge in poisson_generators_edges]
+            prev_nodes = [traci.edge.getFromJunction(edge) for edge in poisson_generators_edges]
         n = len(start_nodes)
         i = 0
         self.__last_indices = []
         while i < n:
             j = random.randint(0, len(self.__target_nodes_data) - 1)
             target_node_data = self.__target_nodes_data[j]
-            if poisson_generators_edges is None:
-                start_node = self.__set_start_node(start_nodes, target_node_data)
-            else:
-                start_node = self.__set_start_node(start_nodes, target_node_data)
+            start_node = self.__set_start_node(start_nodes, target_node_data)
             if start_node != target_node_data.node_id:
+                node_id = start_nodes.index(start_node)
                 start_nodes.remove(start_node)
-                path = self.__net.get_shortest_path(start_node, target_node_data.node_id)
+                if poisson_generators_edges is not None:
+                    prev_node = prev_nodes.pop(node_id)
+                else:
+                    prev_node = None
+                path = self.__net.get_shortest_path(start_node, prev_node, target_node_data.node_id)
                 path_length_in_meters = self.__net.get_path_length_in_meters(path)
                 path_length_in_edges = self.__net.get_path_length_in_edges(path)
                 self.__add_target_node_data(j, start_node, path, path_length_in_meters, path_length_in_edges,

@@ -210,10 +210,10 @@ class TrafficLightsDynamicEnv(gym.Env):
                         action[i] == 0 and max_spent > self.__max_duration):
                     phase_capacity = 0
                 else:
-                    phase_capacity = (reward / max_spent) * max_spent ** 0.75
+                    phase_capacity = reward
                 self.__n_steps_capacity[tls_id] = 0
             sum_phase_capacity += phase_capacity
-        return sum_phase_capacity
+        return sum_phase_capacity * 0.1
 
     def __calculate_step_capacity(self,
                                   vehicles_on_tls_after: list[list[list[str]]],
@@ -278,7 +278,7 @@ class TrafficLightsDynamicEnv(gym.Env):
         reward = step_capacity + phase_capacity
         group_rewards["sum_reward"] = reward
         self.__update_accumulated_rewards(group_rewards)
-        truncated = (self.__local_step == 6000) and (self.__i_window == len(self.__traffic_lights_groups) - 1)
+        truncated = (self.__local_step == 5999) and (self.__i_window == len(self.__traffic_lights_groups) - 1)
         terminated = False
         if self.__i_window == len(self.__traffic_lights_groups) - 1:
             self.__next_timestep()
