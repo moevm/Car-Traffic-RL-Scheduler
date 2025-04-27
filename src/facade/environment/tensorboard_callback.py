@@ -59,9 +59,11 @@ class TensorboardCallback(BaseCallback):
                 self.locals["rewards"] - self.__rollout_normalized_rewards)
         self.__normalized_timestep_rewards += self.locals["rewards"]
         if (self.locals["n_steps"] + 1) % self.__group_size == 0:
+            self.__rollout_normalized_timestep_rewards += self.__normalized_timestep_rewards
             self.__rollout_timestep_rewards += self.__timestep_rewards
             self.__rollout_timestep_step_capacity += self.__timestep_step_capacity
             self.__rollout_timestep_phase_capacity += self.__timestep_phase_capacity
+
             self.__log_timestep_rewards(np.mean(self.__normalized_timestep_rewards), np.mean(self.__timestep_rewards),
                                         np.mean(self.__timestep_step_capacity), np.mean(self.__timestep_phase_capacity))
             self.__reset_timestep_rewards()

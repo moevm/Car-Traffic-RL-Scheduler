@@ -1,5 +1,3 @@
-import random
-
 import gymnasium as gym
 import traci
 import numpy as np
@@ -71,15 +69,13 @@ class TrafficLightsDynamicEnv(gym.Env):
             "phase": MultiDiscrete([self.__max_phases] * self.__group_size),
             "time": Box(low=0, high=self.__critical_duration, shape=(self.__group_size,), dtype=np.float32),
             "bounds": MultiDiscrete([3] * self.__group_size),
-            "accumulated_capacity": Box(low=0, high=10 * self.__critical_duration ** 0.75, shape=(self.__group_size,),
+            "accumulated_capacity": Box(low=0, high=10 * self.__critical_duration, shape=(self.__group_size,),
                                         dtype=np.float32)
         })
         return observation_space
 
     def __get_observation(self, i_window):
         tls_group = self.__traffic_lights_groups[i_window]
-        tls_id = tls_group[0]
-        lanes = set(traci.trafficlight.getControlledLanes(tls_id))
         density = np.zeros(shape=(self.__group_size, self.__n_lanes), dtype=np.float32)
         waiting = np.zeros(shape=(self.__group_size, self.__n_lanes), dtype=np.float32)
         phase = np.zeros(shape=(self.__group_size,), dtype=np.int32)
@@ -87,6 +83,7 @@ class TrafficLightsDynamicEnv(gym.Env):
         bounds = np.zeros(shape=(self.__group_size,), dtype=np.int8)
         accumulated_capacity = np.zeros(shape=(self.__group_size,), dtype=np.float32)
         for i, tls_id in enumerate(tls_group):
+            lanes = list(dict.fromkeys(traci.trafficlight.getControlledLanes(tls_id)))
             for j, lane in enumerate(lanes):
                 waiting[i, j] = traci.lane.getLastStepHaltingNumber(lane) / (
                         traci.lane.getLength(lane) / self.__vehicle_size)
@@ -129,7 +126,7 @@ class TrafficLightsDynamicEnv(gym.Env):
             current_phase = traci.trafficlight.getPhase(tls_id)
             traci.trafficlight.setPhase(tls_id, (current_phase + 1) % n_phases)
         self.__global_step = self.__start_global_step + 1
-        self.__schedule = self.__transport_generator.generate_schedule_for_poisson_flow(self.__global_step + 1)
+        self.__schedule = self.__transport_generator.generate_schedule_for_poisson_flow(self.__global_step + 1, 6000)
         self.__update_vehicles_on_lanes_before()
         self.__i_window, self.__local_step = 0, 0
         observation = self.__get_observation(self.__i_window)
@@ -241,9 +238,9 @@ class TrafficLightsDynamicEnv(gym.Env):
                         if (vehicle_before not in vehicles_on_lanes_after[j]) and (
                                 vehicle_before not in traci.simulation.getArrivedIDList()):
                             reward += 1
-                sum_step_capacity += self.__get_context_reward(spent_duration_tls[i], action[i], reward, 5)
+                sum_step_capacity += self.__get_context_reward(spent_duration_tls[i], action[i], reward, 10)
             self.__n_steps_capacity[tls_id] = reward
-        return sum_step_capacity * 0.1
+        return sum_step_capacity
 
     def __update_vehicles_on_lanes_before(self) -> None:
         for i in range(len(self.__traffic_lights_groups)):

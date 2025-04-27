@@ -26,6 +26,7 @@ class TransportGenerator:
                 traci.vehicle.add(routes_ids[i], routes_ids[i])
                 traci.vehicle.setColor(routes_ids[i], self.__generate_color())
                 self.__vehicles_data[str(routes_ids[i])] = last_target_node_data.path_length_meters[-1]
+
     def clean_vehicles_data(self):
         for arrived_vehicle_id in traci.simulation.getArrivedIDList():
             self.__vehicles_data.pop(arrived_vehicle_id, None)
@@ -40,11 +41,11 @@ class TransportGenerator:
     def get_vehicles_data(self) -> dict[str, int]:
         return self.__vehicles_data
 
-    def generate_schedule_for_poisson_flow(self, start_time: int) -> dict[int, list[str]]:
+    def generate_schedule_for_poisson_flow(self, start_time: int, duration: int) -> dict[int, list[str]]:
         data = {}
         for i, edge in enumerate(self.__generators_edges):
             prev_timestamp = start_time
-            while prev_timestamp < self.__duration + start_time:
+            while prev_timestamp < duration + start_time:
                 if edge in data:
                     data[edge].append(prev_timestamp + round(random.expovariate(self.__intensities[i])))
                 else:

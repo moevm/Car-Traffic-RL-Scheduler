@@ -82,19 +82,6 @@ class TrafficScheduler:
             traci.simulationStep()
 
     @staticmethod
-    def __get_unique_phases_dict(turned_on_traffic_lights_ids: list[str]) -> dict[str, int]:
-        unique_phases_states = set()
-        for tls_id in turned_on_traffic_lights_ids:
-            all_programs = traci.trafficlight.getAllProgramLogics(tls_id)[0]
-            phases = all_programs.getPhases()
-            for phase in phases:
-                if phase.state not in unique_phases_states:
-                    unique_phases_states.add(phase.state)
-        unique_phases_states = list(unique_phases_states)
-        unique_phases_states_dict = {unique_phases_states[i]: i for i in range(len(unique_phases_states))}
-        return unique_phases_states_dict
-
-    @staticmethod
     def _make_env_dynamic(turned_on_traffic_lights_ids: list[str],
                           route_generator: RouteGenerator,
                           transport_generator: TransportGenerator,
