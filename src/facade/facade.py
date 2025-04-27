@@ -155,14 +155,14 @@ class TrafficScheduler:
                     batch_size=15 * len(traffic_lights_groups),
                     max_grad_norm=1.0,
                     normalize_advantage=True,
-                    gae_lambda=0.98,
+                    gae_lambda=0.95,
                     ent_coef=0.005,
                     vf_coef=0.5,
                     device='cuda'
                     )
         model.learn(total_timesteps=self.__simulation_params.DURATION,
                     progress_bar=True,
-                    callback=TensorboardCallback(),
+                    callback=TensorboardCallback(len(traffic_lights_groups[0])),
                     log_interval=1)
         vec_env.save('vec_normalize.pkl')
         vec_env.close()

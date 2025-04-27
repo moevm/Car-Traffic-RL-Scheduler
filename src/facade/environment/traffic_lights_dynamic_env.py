@@ -53,7 +53,6 @@ class TrafficLightsDynamicEnv(gym.Env):
         observation_space = self.__make_observation_space()
         self.observation_space = Dict(observation_space)
         self.action_space = MultiBinary(self.__group_size)
-        self.__rewards = self._init_rewards()
         self.__n_steps_capacity = {tls_id: 0 for tls_id in self.__traffic_lights_ids}
         self.__vehicles_on_lanes_before = {i: [] for i in range(len(self.__traffic_lights_groups))}
 
@@ -131,12 +130,15 @@ class TrafficLightsDynamicEnv(gym.Env):
             traci.trafficlight.setPhase(tls_id, (current_phase + 1) % n_phases)
         self.__global_step = self.__start_global_step + 1
         self.__schedule = self.__transport_generator.generate_schedule_for_poisson_flow(self.__global_step + 1)
-        self.__rewards = self._init_rewards()
         self.__update_vehicles_on_lanes_before()
         self.__i_window, self.__local_step = 0, 0
         observation = self.__get_observation(self.__i_window)
-        info = self.__get_info()
-        return observation, info
+        group_rewards = {
+            "sum_reward": 0.0,
+            "step_capacity": 0.0,
+            "phase_capacity": 0.0,
+        }
+        return observation, group_rewards
 
     def __change_phase(self, action: ActType, i_window: int) -> tuple[list[bool], list[float]]:
         tls_group = self.__traffic_lights_groups[i_window]
@@ -213,7 +215,7 @@ class TrafficLightsDynamicEnv(gym.Env):
                     phase_capacity = reward
                 self.__n_steps_capacity[tls_id] = 0
             sum_phase_capacity += phase_capacity
-        return sum_phase_capacity * 0.1
+        return sum_phase_capacity / 10
 
     def __calculate_step_capacity(self,
                                   vehicles_on_tls_after: list[list[list[str]]],
@@ -241,7 +243,7 @@ class TrafficLightsDynamicEnv(gym.Env):
                             reward += 1
                 sum_step_capacity += self.__get_context_reward(spent_duration_tls[i], action[i], reward, 5)
             self.__n_steps_capacity[tls_id] = reward
-        return sum_step_capacity
+        return sum_step_capacity * 0.1
 
     def __update_vehicles_on_lanes_before(self) -> None:
         for i in range(len(self.__traffic_lights_groups)):
@@ -249,7 +251,6 @@ class TrafficLightsDynamicEnv(gym.Env):
             self.__vehicles_on_lanes_before[i] = vehicles_on_lanes_before
 
     def __next_timestep(self) -> None:
-        self.__update_timestep_rewards()
         self.__update_vehicles_on_lanes_before()
         traci.simulationStep()
         self.__local_step += 1
@@ -263,8 +264,6 @@ class TrafficLightsDynamicEnv(gym.Env):
     def step(
             self, action: ActType
     ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
-        if self.__i_window == 0:
-            self.__rewards = self._init_rewards()
         switched_tls, spent_duration_tls = self.__change_phase(action, self.__i_window)
         vehicles_on_tls_after = self.__get_vehicles_on_lanes(self.__i_window)
         step_capacity = self.__calculate_step_capacity(vehicles_on_tls_after, switched_tls, spent_duration_tls, action,
@@ -273,61 +272,16 @@ class TrafficLightsDynamicEnv(gym.Env):
         group_rewards = {
             "step_capacity": step_capacity,
             "phase_capacity": phase_capacity,
-            "reward_ratio": phase_capacity / (step_capacity + 1e-08)
         }
         reward = step_capacity + phase_capacity
         group_rewards["sum_reward"] = reward
-        self.__update_accumulated_rewards(group_rewards)
         truncated = (self.__local_step == 5999) and (self.__i_window == len(self.__traffic_lights_groups) - 1)
         terminated = False
         if self.__i_window == len(self.__traffic_lights_groups) - 1:
             self.__next_timestep()
         self.__i_window = (self.__i_window + 1) % len(self.__traffic_lights_groups)
-        info = self.__get_info(group_rewards)
         observation = self.__get_observation(self.__i_window)
-        return observation, reward, terminated, truncated, info
-
-    def __update_timestep_rewards(self) -> None:
-        accumulated_rewards = self.__rewards["accumulated_rewards"]
-        timestep_rewards = self.__rewards["timestep_rewards"]
-        updated_timestep_rewards = {key: accumulated_rewards[key] + timestep_rewards[key] for key in
-                                    accumulated_rewards}
-        self.__rewards["timestep_rewards"].update(updated_timestep_rewards)
-        updated_accumulated_rewards = {key: 0.0 for key in accumulated_rewards}
-        self.__rewards["accumulated_rewards"].update(updated_accumulated_rewards)
-
-    def __get_info(self, group_rewards: dict[str, float] = None) -> dict[str, dict[str, float]]:
-        if group_rewards is None:
-            group_rewards = {key: 0 for key in self.__rewards["timestep_rewards"]}
-        info = {
-            "timestep_rewards": self.__rewards["timestep_rewards"],
-            "group_rewards": group_rewards
-        }
-        return info
-
-    def __update_accumulated_rewards(self, group_rewards: dict[str, float]) -> None:
-        accumulated_rewards = self.__rewards["accumulated_rewards"]
-        updated_accumulated_rewards = {key: accumulated_rewards[key] + group_rewards[key] for key in
-                                       accumulated_rewards}
-        self.__rewards["accumulated_rewards"].update(updated_accumulated_rewards)
-
-    @staticmethod
-    def _init_rewards():
-        info = {
-            "timestep_rewards": {
-                "sum_reward": 0.0,
-                "step_capacity": 0.0,
-                "phase_capacity": 0.0,
-                "reward_ratio": 0.0
-            },
-            "accumulated_rewards": {
-                "sum_reward": 0.0,
-                "step_capacity": 0.0,
-                "phase_capacity": 0.0,
-                "reward_ratio": 0.0
-            }
-        }
-        return info
+        return observation, reward, terminated, truncated, group_rewards
 
     def close(self):
         traci.close()
