@@ -2,8 +2,6 @@ import click
 import random
 import json
 
-from pygments.lexer import default
-
 from facade.net import Net
 from facade.logger.network_logger import NetworkLogger
 from facade.logger.logger import Message
@@ -73,7 +71,7 @@ def make_list_of_turned_off_traffic_lights(part_off_traffic_lights: float, net: 
 @click.option('--part-generators', '-g', type=float, default=0.1, help='This part of non-extreme edges will act '
                                                                        'as flow generators. Extreme edges act as '
                                                                        'flow generators by default.\n')
-@click.option('--file', '-f', type=str, default='./configs/simulation-parameters/simulation_parameters.json',
+@click.option('--file', '-f', type=str, default='./configs/learning-configs/learning_parameters.json',
               help='path to simulation parameters config file (.sumocfg).\n')
 @click.option('--init-delay', '-n', type=int, default=10, help='Delay between vehicle departures during map '
                                                                'initialization by traffic.\n')
@@ -85,9 +83,6 @@ def make_list_of_turned_off_traffic_lights(part_off_traffic_lights: float, net: 
                                                                 'meters.\n')
 @click.option('--part-off-traffic-lights', '-t', default=0.0, type=float, help='This part of traffic lights '
                                                                                'will be turned off.\n')
-@click.option('--threshold-edge-length', '-e', default=200, type=int, help='Traffic lights will be installed every '
-                                                                           '[--threshold-edge-length] value meters on each edge, '
-                                                                           'simulating pedestrian crossings.\n')
 @click.option('--cpu-scale', '-c', type=int, default=2, help="Process pool size during the operation of the Dijkstra "
                                                              "algorithm and the path reconstruction algorithm for each departure "
                                                              "node will be [number of cpu's] * [--cpu-scale]').\n")
@@ -104,7 +99,6 @@ def main(duration: int,
          part_of_the_path: float,
          check_time: int,
          part_off_traffic_lights: float,
-         threshold_edge_length: int,
          cpu_scale: int,
          upper_limit_of_intensity: float,
          lower_limit_of_intensity: float,

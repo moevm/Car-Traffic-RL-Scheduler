@@ -11,6 +11,7 @@ class TensorboardCallback(BaseCallback):
         self.__max_step_capacity = float("-inf")
         self.__max_phase_capacity = float("-inf")
         self.__group_size = group_size
+        self.__rollout_counter = 0
 
     def _on_rollout_start(self) -> None:
         self.__rollout_normalized_rewards = np.zeros(shape=(self.training_env.num_envs,), dtype=np.float32)
@@ -95,6 +96,13 @@ class TensorboardCallback(BaseCallback):
         self.logger.record("rollout/max_diff", self.__abs_max_diff)
         self.logger.record("rollout/max_step_capacity", self.__max_step_capacity)
         self.logger.record("rollout/max_phase_capacity", self.__max_phase_capacity)
+
+        if self.__rollout_counter % 100 == 0:
+            self.model.save(
+                f"./pre_training/pre_trained_model_{self.__rollout_counter * (self.locals["n_steps"] + 1) * self.training_env.num_envs}")
+            self.training_env.save(
+                f'./pre_training/pre_vec_normalize_{self.__rollout_counter * (self.locals["n_steps"] + 1) * self.training_env.num_envs}.pkl')
+        self.__rollout_counter += 1
 
     def __log_timestep_rewards(self, normalized_reward: np.float32, reward: np.float32, step_capacity: np.float32,
                                phase_capacity: np.float32) -> None:

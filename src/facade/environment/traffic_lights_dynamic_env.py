@@ -18,9 +18,13 @@ class TrafficLightsDynamicEnv(gym.Env):
                  checkpoint_file: str,
                  sumo_config: str,
                  traffic_lights_groups: list[list[str]],
+                 edges: list[str],
+                 truncated_time: int,
                  n_lanes: int,
                  gui: bool = False,
                  train_mode: bool = True):
+        self.__edges = edges
+        self.__truncated_time = truncated_time
         self.__gui = gui
         self.__train_mode = train_mode
         self.__n_lanes = n_lanes
@@ -45,6 +49,7 @@ class TrafficLightsDynamicEnv(gym.Env):
         self.__group_size = len(self.__traffic_lights_groups[0])
         self.__min_duration = 15
         self.__max_duration = 90
+        self.__max_tls_neighbors = 4
         self.__critical_duration = 180
         self.__max_phases = 4
         self.__i_window = 0
@@ -53,6 +58,14 @@ class TrafficLightsDynamicEnv(gym.Env):
         self.action_space = MultiBinary(self.__group_size)
         self.__n_steps_capacity = {tls_id: 0 for tls_id in self.__traffic_lights_ids}
         self.__vehicles_on_lanes_before = {i: [] for i in range(len(self.__traffic_lights_groups))}
+        self.__statistics = {
+            "mean_halting_number": [],
+            "running_cars": [],
+            "mean_waiting_time": [],
+            "mean_speed": [],
+            "arrived_number": [],
+            "step": []
+        }
 
     @staticmethod
     def _average_vehicle_size():
@@ -73,6 +86,58 @@ class TrafficLightsDynamicEnv(gym.Env):
                                         dtype=np.float32)
         })
         return observation_space
+
+    # def __make_observation_space(self):
+    #     observation_space = Dict({
+    #         "density": Box(low=0, high=100 * self.__n_lanes, shape=(self.__group_size, self.__max_tls_neighbors),
+    #                        dtype=np.float32),
+    #         "waiting": Box(low=0, high=self.__n_lanes, shape=(self.__group_size, self.__max_tls_neighbors),
+    #                        dtype=np.float32),
+    #         "phase": MultiDiscrete([self.__max_phases] * self.__group_size),
+    #         "time": Box(low=0, high=self.__critical_duration, shape=(self.__group_size,), dtype=np.float32),
+    #         "bounds": MultiDiscrete([3] * self.__group_size),
+    #         "accumulated_capacity": Box(low=0, high=10 * self.__critical_duration, shape=(self.__group_size,),
+    #                                     dtype=np.float32)
+    #     })
+    #     return observation_space
+
+    # def __get_observation(self, i_window):
+    #     tls_group = self.__traffic_lights_groups[i_window]
+    #     density = np.zeros(shape=(self.__group_size, self.__max_tls_neighbors), dtype=np.float32)
+    #     waiting = np.zeros(shape=(self.__group_size, self.__max_tls_neighbors), dtype=np.float32)
+    #     phase = np.zeros(shape=(self.__group_size,), dtype=np.int32)
+    #     time = np.zeros(shape=(self.__group_size,), dtype=np.int32)
+    #     bounds = np.zeros(shape=(self.__group_size,), dtype=np.int8)
+    #     accumulated_capacity = np.zeros(shape=(self.__group_size,), dtype=np.float32)
+    #     for i, tls_id in enumerate(tls_group):
+    #         lanes = list(dict.fromkeys(traci.trafficlight.getControlledLanes(tls_id)))
+    #         for j in range(0, len(lanes), 2):
+    #             lane = lanes[j]
+    #             direction_waiting = traci.lane.getLastStepHaltingNumber(lane) / (
+    #                     traci.lane.getLength(lane) / self.__vehicle_size) + traci.lane.getLastStepHaltingNumber(
+    #                 lanes[j + 1]) / (traci.lane.getLength(lanes[j + 1]) / self.__vehicle_size)
+    #             direction_density = (traci.lane.getLastStepOccupancy(lane) +
+    #                                  traci.lane.getLastStepOccupancy(lanes[j + 1]))
+    #             waiting[i, j // 2] = direction_waiting
+    #             density[i, j // 2] = direction_density
+    #         phase[i] = traci.trafficlight.getPhase(tls_id)
+    #         time[i] = min(traci.trafficlight.getSpentDuration(tls_id), self.__critical_duration)
+    #         accumulated_capacity[i] = self.__n_steps_capacity[tls_id]
+    #         if traci.trafficlight.getSpentDuration(tls_id) < self.__min_duration:
+    #             bounds[i] = 0
+    #         elif self.__min_duration <= traci.trafficlight.getSpentDuration(tls_id) <= self.__max_duration:
+    #             bounds[i] = 1
+    #         elif traci.trafficlight.getSpentDuration(tls_id) > self.__max_duration:
+    #             bounds[i] = 2
+    #     observation = {
+    #         "density": density,
+    #         "waiting": waiting,
+    #         "phase": phase,
+    #         "time": time,
+    #         "bounds": bounds,
+    #         "accumulated_capacity": accumulated_capacity
+    #     }
+    #     return observation
 
     def __get_observation(self, i_window):
         tls_group = self.__traffic_lights_groups[i_window]
@@ -126,7 +191,8 @@ class TrafficLightsDynamicEnv(gym.Env):
             current_phase = traci.trafficlight.getPhase(tls_id)
             traci.trafficlight.setPhase(tls_id, (current_phase + 1) % n_phases)
         self.__global_step = self.__start_global_step + 1
-        self.__schedule = self.__transport_generator.generate_schedule_for_poisson_flow(self.__global_step + 1, 6000)
+        self.__schedule = self.__transport_generator.generate_schedule_for_poisson_flow(self.__global_step + 1,
+                                                                                        self.__truncated_time)
         self.__update_vehicles_on_lanes_before()
         self.__i_window, self.__local_step = 0, 0
         observation = self.__get_observation(self.__i_window)
@@ -184,7 +250,7 @@ class TrafficLightsDynamicEnv(gym.Env):
         if action == 1 and spent < self.__min_duration:
             context_reward = -max_reward * (1 - spent / self.__min_duration)
         elif action == 0 and spent > self.__max_duration:
-            context_reward = max_reward * (1 - spent / self.__max_duration)
+            context_reward = -max_reward * spent / self.__max_duration
         else:
             context_reward = reward
         return context_reward
@@ -248,6 +314,8 @@ class TrafficLightsDynamicEnv(gym.Env):
             self.__vehicles_on_lanes_before[i] = vehicles_on_lanes_before
 
     def __next_timestep(self) -> None:
+        if not self.__train_mode:
+            self.__collect_statistics()
         self.__update_vehicles_on_lanes_before()
         traci.simulationStep()
         self.__local_step += 1
@@ -272,13 +340,34 @@ class TrafficLightsDynamicEnv(gym.Env):
         }
         reward = step_capacity + phase_capacity
         group_rewards["sum_reward"] = reward
-        truncated = (self.__local_step == 5999) and (self.__i_window == len(self.__traffic_lights_groups) - 1)
+        truncated = (self.__local_step == self.__truncated_time) and (
+                self.__i_window == len(self.__traffic_lights_groups) - 1)
         terminated = False
         if self.__i_window == len(self.__traffic_lights_groups) - 1:
             self.__next_timestep()
         self.__i_window = (self.__i_window + 1) % len(self.__traffic_lights_groups)
         observation = self.__get_observation(self.__i_window)
         return observation, reward, terminated, truncated, group_rewards
+
+    def __collect_statistics(self):
+        halting_number = 0
+        waiting_time = 0
+        speed = 0
+        for edge in self.__edges:
+            halting_number += traci.edge.getLastStepHaltingNumber(edge)
+            waiting_time += traci.edge.getWaitingTime(edge)
+        vehicles = traci.vehicle.getIDList()
+        for vehicle in vehicles:
+            speed += traci.vehicle.getSpeed(vehicle)
+        self.__statistics["mean_halting_number"].append(halting_number / len(self.__edges))
+        self.__statistics["running_cars"].append(len(vehicles))
+        self.__statistics["mean_waiting_time"].append(waiting_time / len(self.__edges))
+        self.__statistics["mean_speed"].append(speed / len(vehicles))
+        self.__statistics["arrived_number"].append(traci.simulation.getArrivedNumber())
+        self.__statistics["step"].append(self.__local_step + 1)
+
+    def get_statistics(self) -> dict[str, list[float]]:
+        return self.__statistics
 
     def close(self):
         traci.close()

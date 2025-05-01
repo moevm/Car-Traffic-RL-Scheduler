@@ -4,6 +4,9 @@
 __pycache__/
 *.zip
 *.pyc
+*.csv
+pre_training/
+statistics/
 a2c_traffic_lights_tensorboard/
 ppo_traffic_lights_tensorboard/
 ../pics/

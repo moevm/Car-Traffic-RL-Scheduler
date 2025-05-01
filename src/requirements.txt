@@ -5,8 +5,9 @@ traci==1.21.0
 wcwidth==0.2.13
 numpy==2.2.1
 click==8.1.8
-stable_baselines3~=2.5.0
 gymnasium~=1.0.0
 stable_baselines3~=2.6.0
-sb3_contrib~=2.6.0
 Pygments~=2.19.1
+pandas~=2.2.3
+sb3_contrib~=2.6.0
+stable_baselines3~=2.6.0
