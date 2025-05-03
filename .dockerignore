@@ -1,0 +1,8 @@
+*.md
+/src/.idea/
+/src/.venv/
+/src/ppo_traffic_lights_tensorboard/
+/src/pre_training/
+src/.gitignore
+__pycache__/
+*.pyc

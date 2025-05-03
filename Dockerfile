@@ -1,21 +1,21 @@
-FROM ubuntu:24.04 AS builder
+FROM nvidia/cuda:12.6.0-cudnn-runtime-ubuntu24.04
 
 LABEL Description="Dockerised Simulation of Urban MObility(SUMO)"
 
 ENV SUMO_VERSION 1.21.0
 ENV SUMO_MAKE_FOLDER /opt/sumo
 
-RUN apt-get update && \ 
+RUN apt-get update && \
     apt-get install -y cmake \
-    python3 \ 
+    python3 \
     wget \
     g++ \
-    libxerces-c-dev \ 
+    libxerces-c-dev \
     libfox-1.6-dev \
-    libgdal-dev \ 
-    libproj-dev \ 
+    libgdal-dev \
+    libproj-dev \
     libgl2ps-dev \
-    python3-dev \ 
+    python3-dev \
     swig \
     default-jdk \
     maven \
@@ -29,30 +29,23 @@ RUN apt-get update && \
     cmake -B build . && \
     cmake --build build -j$(nproc) && \
     cmake --install build && \
-    apt-get clean
-
-
-FROM ubuntu:24.04
-
-ENV VIRTUAL_ENV "sumovenv"
-ENV SUMO_HOME "opt/sumo"
-RUN apt-get update && \
     apt-get install -y python3.12 \
     python3-pip \
     python3.12-venv && \
-    export SUMO_HOME="$SUMO_MAKE_FOLDER" && \ 
     apt-get clean
 
-COPY --from=builder $SUMO_MAKE_FOLDER $SUMO_MAKE_FOLDER
 WORKDIR /app
+
+ENV VIRTUAL_ENV sumovenv
 
 COPY ./src/requirements.txt /app/requirements.txt
 
 RUN python3 -m venv $VIRTUAL_ENV && \
-     . $VIRTUAL_ENV/bin/activate && \
-     pip install -r requirements.txt --no-cache-dir && \
-     apt-get clean
+    . $VIRTUAL_ENV/bin/activate && \
+    pip install -r requirements.txt --no-cache-dir && \
+    apt-get clean
 
 COPY ./src /app
+COPY entrypoint.sh /app/entrypoint.sh
 
-CMD ["bash"]
+CMD ["./entrypoint.sh"]
