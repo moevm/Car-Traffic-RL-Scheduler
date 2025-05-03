@@ -1,5 +1,5 @@
 #!/bin/bash
-export SUMO_HOME="/opt/sumo"
+export SUMO_HOME="/usr/local/share/sumo"
 
 source sumovenv/bin/activate
 

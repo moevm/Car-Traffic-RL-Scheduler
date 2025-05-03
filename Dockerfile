@@ -1,6 +1,6 @@
 FROM nvidia/cuda:12.6.0-cudnn-runtime-ubuntu24.04
 
-LABEL Description="Dockerised Simulation of Urban MObility(SUMO)"
+LABEL Description="Containerized traffic RL-scheduler in SUMO"
 
 ENV SUMO_VERSION 1.21.0
 ENV SUMO_MAKE_FOLDER /opt/sumo
