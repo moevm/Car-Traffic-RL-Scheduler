@@ -141,7 +141,7 @@ class TrafficScheduler:
                                                         self.__n_lanes,
                                                         self.__edges,
                                                         truncated_time=n_steps * 10,
-                                                        gui=i == 0,
+                                                        gui=False,
                                                         train_mode=True) for i in range(self.__num_envs)])
         vec_env = VecNormalize(vec_env, norm_obs=True, norm_reward=True,
                                norm_obs_keys=["density", "waiting", "time"])
