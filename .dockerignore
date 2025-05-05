@@ -1,5 +1,6 @@
 *.md
 /src/.idea/
+./vscode/
 /src/.venv/
 /src/ppo_traffic_lights_tensorboard/
 /src/pre_training/

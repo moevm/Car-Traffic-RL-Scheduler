@@ -99,9 +99,9 @@ class TensorboardCallback(BaseCallback):
 
         if self.__rollout_counter % 100 == 0:
             self.model.save(
-                f"./pre_training/pre_trained_model_{self.__rollout_counter * (self.locals["n_steps"] + 1) * self.training_env.num_envs}")
+                f"./pre_trained_models/pre_trained_model_{self.__rollout_counter * (self.locals["n_steps"] + 1) * self.training_env.num_envs}")
             self.training_env.save(
-                f'./pre_training/pre_vec_normalize_{self.__rollout_counter * (self.locals["n_steps"] + 1) * self.training_env.num_envs}.pkl')
+                f'./pre_trained_models/pre_vec_normalize_{self.__rollout_counter * (self.locals["n_steps"] + 1) * self.training_env.num_envs}.pkl')
         self.__rollout_counter += 1
 
     def __log_timestep_rewards(self, normalized_reward: np.float32, reward: np.float32, step_capacity: np.float32,
