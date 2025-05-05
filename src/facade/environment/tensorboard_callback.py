@@ -2,7 +2,6 @@ import numpy as np
 
 from stable_baselines3.common.callbacks import BaseCallback
 
-
 class TensorboardCallback(BaseCallback):
     def __init__(self, verbose=0, group_size=4):
         super().__init__(verbose)
@@ -96,11 +95,10 @@ class TensorboardCallback(BaseCallback):
         self.logger.record("rollout/max_diff", self.__abs_max_diff)
         self.logger.record("rollout/max_step_capacity", self.__max_step_capacity)
         self.logger.record("rollout/max_phase_capacity", self.__max_phase_capacity)
-
         if self.__rollout_counter % 100 == 0:
             self.model.save(
                 f"./pre_trained_models/pre_trained_model_{self.__rollout_counter * (self.locals["n_steps"] + 1) * self.training_env.num_envs}")
-            self.training_env.save(
+            self.model.get_vec_normalize_env().save(
                 f'./pre_trained_models/pre_vec_normalize_{self.__rollout_counter * (self.locals["n_steps"] + 1) * self.training_env.num_envs}.pkl')
         self.__rollout_counter += 1
 

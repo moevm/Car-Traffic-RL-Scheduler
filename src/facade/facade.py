@@ -130,6 +130,7 @@ class TrafficScheduler:
 
     def learn(self):
         self.__setup_start_simulation_state()
+        n_steps = 60 * len(self.__traffic_lights_groups) * 4
         vec_env = SubprocVecEnv([self._make_env_dynamic(self.__turned_on_traffic_lights,
                                                         self.__route_generator,
                                                         self.__transport_generator,
@@ -139,7 +140,7 @@ class TrafficScheduler:
                                                         self.__traffic_lights_groups,
                                                         self.__n_lanes,
                                                         self.__edges,
-                                                        truncated_time=14999,
+                                                        truncated_time=n_steps * 10,
                                                         gui=i == 0,
                                                         train_mode=True) for i in range(self.__num_envs)])
         vec_env = VecNormalize(vec_env, norm_obs=True, norm_reward=True,
@@ -148,8 +149,8 @@ class TrafficScheduler:
                              env=vec_env,
                              tensorboard_log='./ppo_traffic_lights_tensorboard',
                              learning_rate=get_linear_fn(start=0.0003, end=0.000012, end_fraction=0.5),
-                             n_steps=60 * len(self.__traffic_lights_groups) * 10,
-                             batch_size=30 * len(self.__traffic_lights_groups) * len(self.__traffic_lights_groups[0]),
+                             n_steps=n_steps,
+                             batch_size=n_steps // 4,
                              max_grad_norm=1.0,
                              normalize_advantage=True,
                              gae_lambda=0.95,
