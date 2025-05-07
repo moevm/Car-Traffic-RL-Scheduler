@@ -141,7 +141,7 @@ class TrafficScheduler:
                                                         self.__n_lanes,
                                                         self.__edges,
                                                         truncated_time=n_steps * 10,
-                                                        gui=False,
+                                                        gui=i == 0,
                                                         train_mode=True) for i in range(self.__num_envs)])
         vec_env = VecNormalize(vec_env, norm_obs=True, norm_reward=True,
                                norm_obs_keys=["density", "waiting", "time"])
@@ -151,7 +151,7 @@ class TrafficScheduler:
                              learning_rate=get_linear_fn(start=0.0003, end=0.000012, end_fraction=0.5),
                              n_steps=n_steps,
                              batch_size=n_steps // 4,
-                             max_grad_norm=1.0,
+                             max_grad_norm=0.8,
                              normalize_advantage=True,
                              gae_lambda=0.95,
                              ent_coef=0.005,
@@ -208,11 +208,11 @@ class TrafficScheduler:
                                                       truncated_time=5999,
                                                       gui=True,
                                                       train_mode=False)])
-        vec_env = VecNormalize.load('./pre_training/pre_vec_normalize_23.pkl', vec_env)
+        vec_env = VecNormalize.load('pre_vec_normalize_3840000.pkl', vec_env)
         vec_env.training, vec_env.norm_reward = False, False
         lstm_states = None
         episode_starts = np.ones((1,), dtype=bool)
-        model = RecurrentPPO.load('./pre_training/pre_trained_model_23', env=vec_env, device='cpu')
+        model = RecurrentPPO.load('pre_trained_model_3840000', env=vec_env, device='cpu')
         model_env = model.get_env()
         obs = model_env.reset()
         while True:
