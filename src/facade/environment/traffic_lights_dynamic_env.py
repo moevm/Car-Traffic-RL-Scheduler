@@ -51,7 +51,7 @@ class TrafficLightsDynamicEnv(gym.Env):
         self.__max_duration = 90
         self.__max_tls_neighbors = 4
         self.__critical_duration = 180
-        self.__max_phases = 4
+        self.__max_phases = 6
         self.__i_window = 0
         observation_space = self.__make_observation_space()
         self.observation_space = Dict(observation_space)
@@ -148,9 +148,25 @@ class TrafficLightsDynamicEnv(gym.Env):
             "sum_reward": 0.0,
             "step_capacity": 0.0,
             "phase_capacity": 0.0,
-            "tls_reward": 0.0
+            "tls_reward": 0.0,
+            "halting_reward": 0.0
         }
         return observation, group_rewards
+
+    def __calculate_halting_reward(self, switched_tls: list[bool], i_window: int) -> float:
+        tls_group = self.__traffic_lights_groups[i_window]
+        sum_halting_number = 0.0
+        for i, tls_id in enumerate(tls_group):
+            tls_id = tls_group[i]
+            current_logic = traci.trafficlight.getAllProgramLogics(tls_id)[0]
+            current_phase = traci.trafficlight.getPhase(tls_id)
+            state = current_logic.phases[current_phase].state
+            lanes = set(traci.trafficlight.getControlledLanes(tls_id))
+            if ('y' not in state) or (('y' in state) and switched_tls[i]):
+                for j, lane in enumerate(lanes):
+                    sum_halting_number += traci.lane.getLastStepHaltingNumber(lane) / (
+                            traci.lane.getLength(lane) / self.__vehicle_size)
+        return -sum_halting_number
 
     def __change_phase(self, action: ActType, i_window: int) -> tuple[float, list[bool], list[float]]:
         tls_group = self.__traffic_lights_groups[i_window]
@@ -175,6 +191,7 @@ class TrafficLightsDynamicEnv(gym.Env):
                     reward = self.__get_context_reward(max(spent, 1), action[i], -50)
                 else:
                     if action[i] == 1:
+                        print(spent)
                         if spent >= self.__min_duration:
                             traci.trafficlight.setPhase(tls_id, (current_phase + 1) % n_phases)
                         else:
@@ -277,10 +294,12 @@ class TrafficLightsDynamicEnv(gym.Env):
         vehicles_on_tls_after = self.__get_vehicles_on_lanes(self.__i_window)
         step_capacity = self.__calculate_step_capacity(vehicles_on_tls_after, switched_tls, self.__i_window)
         phase_capacity = self.__calculate_phase_capacity(switched_tls, self.__i_window)
+        halting_reward = self.__calculate_halting_reward(switched_tls, self.__i_window)
         group_rewards = {
             "step_capacity": step_capacity,
             "phase_capacity": phase_capacity,
-            "tls_reward": tls_reward
+            "tls_reward": tls_reward,
+            "halting_reward": halting_reward
         }
         group_rewards["sum_reward"] = sum(group_rewards.values())
         reward = sum(group_rewards.values())

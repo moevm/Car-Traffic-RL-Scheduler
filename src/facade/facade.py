@@ -2,6 +2,7 @@ import json
 
 import numpy as np
 import traci
+import os
 from sb3_contrib import RecurrentPPO
 from facade.environment.tensorboard_callback import TensorboardCallback
 from facade.environment.traffic_lights_dynamic_env import TrafficLightsDynamicEnv
@@ -12,6 +13,7 @@ from facade.net import Net
 from facade.structures import SimulationParams
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize, DummyVecEnv
 from stable_baselines3.common.utils import get_linear_fn
+from stable_baselines3 import PPO
 import pandas as pd
 
 
@@ -112,6 +114,21 @@ class TrafficScheduler:
 
         return _init
 
+    def __save_statistics(self, statistics):
+        statistics['sumocfg-file'] = self.__SUMO_CONFIG
+        filename = 'statistics.json'
+        if os.path.exists(filename):
+            with open(filename, "r") as f:
+                try:
+                    data = json.load(f)
+                except json.JSONDecodeError:
+                    data = {}
+        else:
+            data = {}
+        data.update(statistics)
+        with open(filename, 'w') as json_file:
+            json.dump(statistics, json_file, indent=4)
+
     def __setup_start_simulation_state(self):
         sumo_cmd = ["sumo", "-c", self.__SUMO_CONFIG]
         traci.start(sumo_cmd)
@@ -130,7 +147,7 @@ class TrafficScheduler:
 
     def learn(self):
         self.__setup_start_simulation_state()
-        n_steps = 60 * len(self.__traffic_lights_groups) * 4
+        n_steps = 60 * len(self.__traffic_lights_groups)
         vec_env = SubprocVecEnv([self._make_env_dynamic(self.__turned_on_traffic_lights,
                                                         self.__route_generator,
                                                         self.__transport_generator,
@@ -145,18 +162,18 @@ class TrafficScheduler:
                                                         train_mode=True) for i in range(self.__num_envs)])
         vec_env = VecNormalize(vec_env, norm_obs=True, norm_reward=True,
                                norm_obs_keys=["density", "waiting", "time"])
-        model = RecurrentPPO(policy='MultiInputLstmPolicy',
-                             env=vec_env,
-                             tensorboard_log='./ppo_traffic_lights_tensorboard',
-                             learning_rate=get_linear_fn(start=0.0003, end=0.000012, end_fraction=0.5),
-                             n_steps=n_steps,
-                             batch_size=n_steps // 4,
-                             max_grad_norm=0.8,
-                             normalize_advantage=True,
-                             gae_lambda=0.95,
-                             ent_coef=0.005,
-                             vf_coef=0.5,
-                             device='cuda')
+        model = PPO(policy='MultiInputPolicy',
+                    env=vec_env,
+                    tensorboard_log='./ppo_traffic_lights_tensorboard',
+                    learning_rate=get_linear_fn(start=0.0003, end=0.000012, end_fraction=0.5),
+                    n_steps=n_steps,
+                    batch_size=n_steps // 4,
+                    max_grad_norm=0.8,
+                    normalize_advantage=True,
+                    gae_lambda=0.95,
+                    ent_coef=0.005,
+                    vf_coef=0.5,
+                    device='cuda')
         model.learn(total_timesteps=self.__simulation_params.DURATION,
                     progress_bar=True,
                     callback=TensorboardCallback(len(self.__traffic_lights_groups[0])),
@@ -179,7 +196,7 @@ class TrafficScheduler:
                                                         truncated_time=5999,
                                                         gui=i == 0,
                                                         train_mode=True) for i in range(self.__num_envs)])
-        vec_env = VecNormalize.load('pre_vec_normalize_1200000.pkl', vec_env)
+        vec_env = VecNormalize.load('pre_vec_normalize_6731200.pkl', vec_env)
         vec_env.training = True
         vec_env.norm_reward = True
         vec_env.norm_obs = True
@@ -208,24 +225,19 @@ class TrafficScheduler:
                                                       truncated_time=5999,
                                                       gui=True,
                                                       train_mode=False)])
-        vec_env = VecNormalize.load('pre_vec_normalize_3840000.pkl', vec_env)
+        vec_env = VecNormalize.load('vec_normalize.pkl', vec_env)
         vec_env.training, vec_env.norm_reward = False, False
-        lstm_states = None
-        episode_starts = np.ones((1,), dtype=bool)
-        model = RecurrentPPO.load('pre_trained_model_3840000', env=vec_env, device='cpu')
+        model = PPO.load('trained_model', env=vec_env, device='cpu')
         model_env = model.get_env()
         obs = model_env.reset()
         while True:
-            action, lstm_states = model.predict(obs, deterministic=True, state=lstm_states,
-                                                episode_start=episode_starts)
+            action, _ = model.predict(obs, deterministic=True)
             obs, rewards, dones, info = model_env.step(action)
-            episode_starts = dones
             if all(dones):
                 break
         agent_statistics = vec_env.venv.envs[0].unwrapped.get_statistics()
         model_env.close()
-        df = pd.DataFrame(agent_statistics)
-        df.to_csv("./statistics/agent_statistics.csv")
+        self.__save_statistics(agent_statistics)
 
     def default_agent_evaluation(self) -> None:
         self.__setup_start_simulation_state()
@@ -268,5 +280,4 @@ class TrafficScheduler:
                 self.__transport_generator.generate_transport(last_target_nodes_data)
             self.__transport_generator.clean_vehicles_data()
         traci.close()
-        df = pd.DataFrame(default_agent_statistics)
-        df.to_csv("./statistics/default_statistics.csv")
+        self.__save_statistics(default_agent_statistics)
