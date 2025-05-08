@@ -115,7 +115,7 @@ class TrafficScheduler:
         return _init
 
     def __save_statistics(self, statistics):
-        statistics['sumocfg-file'] = self.__SUMO_CONFIG
+        agent_info = {self.__SUMO_CONFIG: statistics}
         filename = 'statistics.json'
         if os.path.exists(filename):
             with open(filename, "r") as f:
@@ -125,9 +125,9 @@ class TrafficScheduler:
                     data = {}
         else:
             data = {}
-        data.update(statistics)
+        data.update(agent_info)
         with open(filename, 'w') as json_file:
-            json.dump(statistics, json_file, indent=4)
+            json.dump(data, json_file, indent=4)
 
     def __setup_start_simulation_state(self):
         sumo_cmd = ["sumo", "-c", self.__SUMO_CONFIG]

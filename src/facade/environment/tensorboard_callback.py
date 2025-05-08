@@ -20,8 +20,9 @@ class TensorboardCallback(BaseCallback):
         }
 
     def __update_statistics_from_info(self, info, i):
+        ignored_args = ['TimeLimit.truncated', 'terminal_observation']
         for reward_type in info:
-            if reward_type != 'TimeLimit.truncated':
+            if reward_type not in ignored_args:
                 reward = self.__rollout_rewards[reward_type][i]
                 self.__rollout_rewards[reward_type][i] = (reward + (1 / (self.locals["n_steps"] + 1)) *
                                                           (info[reward_type] - reward))
