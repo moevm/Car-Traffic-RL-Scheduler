@@ -9,6 +9,7 @@ __pycache__/
 *.csv
 pre_trained_models/
 statistics/
-a2c_traffic_lights_tensorboard/
 ppo_traffic_lights_tensorboard/
+pre_trained_models_server
+server_models_ppo_traffic_lights_tensorboard
 ../pics/

@@ -188,7 +188,7 @@ class TrafficLightsDynamicEnv(gym.Env):
                         switched_tls[i] = True
                     elif action[i] == 0:
                         traci.trafficlight.setPhase(tls_id, current_phase)
-                    reward = self.__get_context_reward(max(spent, 1), action[i], -50)
+                    reward = self.__get_context_reward(max(spent, 1), action[i], -25)
                 else:
                     if action[i] == 1:
                         print(spent)
@@ -202,7 +202,7 @@ class TrafficLightsDynamicEnv(gym.Env):
                             traci.trafficlight.setPhase(tls_id, (current_phase + 1) % n_phases)
                         else:
                             traci.trafficlight.setPhase(tls_id, current_phase)
-                    reward = self.__get_context_reward(max(spent, 1), action[i], -50)
+                    reward = self.__get_context_reward(max(spent, 1), action[i], -25)
             sum_reward += reward
         return sum_reward, switched_tls, spent_duration_tls
 
@@ -241,7 +241,7 @@ class TrafficLightsDynamicEnv(gym.Env):
                 phase_capacity = self.__n_steps_capacity[tls_id]
                 self.__n_steps_capacity[tls_id] = 0
             sum_phase_capacity += phase_capacity
-        return sum_phase_capacity / 10
+        return sum_phase_capacity
 
     def __calculate_step_capacity(self,
                                   vehicles_on_tls_after: list[list[list[str]]],

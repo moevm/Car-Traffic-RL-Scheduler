@@ -114,20 +114,15 @@ class TrafficScheduler:
 
         return _init
 
-    def __save_statistics(self, statistics):
-        agent_info = {self.__SUMO_CONFIG: statistics}
-        filename = 'statistics.json'
-        if os.path.exists(filename):
-            with open(filename, "r") as f:
-                try:
-                    data = json.load(f)
-                except json.JSONDecodeError:
-                    data = {}
+    def __save_statistics(self, statistics, info=''):
+        name = self.__SUMO_CONFIG.replace('configs/evaluating_configs/', '')
+        name = name.replace('/', '_')
+        name = name.replace('.sumocfg', '')
+        df = pd.DataFrame(statistics)
+        if info == '':
+            df.to_csv(f'statistics/{name}')
         else:
-            data = {}
-        data.update(agent_info)
-        with open(filename, 'w') as json_file:
-            json.dump(data, json_file, indent=4)
+            df.to_csv(f'statistics/{name}_{info}')
 
     def __setup_start_simulation_state(self):
         sumo_cmd = ["sumo", "-c", self.__SUMO_CONFIG]
@@ -165,7 +160,7 @@ class TrafficScheduler:
         model = PPO(policy='MultiInputPolicy',
                     env=vec_env,
                     tensorboard_log='./ppo_traffic_lights_tensorboard',
-                    learning_rate=get_linear_fn(start=0.0003, end=0.000012, end_fraction=0.5),
+                    learning_rate=get_linear_fn(start=0.0001, end=0.000012, end_fraction=0.5),
                     n_steps=n_steps,
                     batch_size=n_steps // 4,
                     max_grad_norm=0.8,
@@ -225,9 +220,9 @@ class TrafficScheduler:
                                                       truncated_time=5999,
                                                       gui=True,
                                                       train_mode=False)])
-        vec_env = VecNormalize.load('vec_normalize.pkl', vec_env)
+        vec_env = VecNormalize.load('./pre_trained_models_server/pre_vec_normalize_21155200.pkl', vec_env)
         vec_env.training, vec_env.norm_reward = False, False
-        model = PPO.load('trained_model', env=vec_env, device='cpu')
+        model = PPO.load('./pre_trained_models_server/pre_trained_model_21155200', env=vec_env, device='cpu')
         model_env = model.get_env()
         obs = model_env.reset()
         while True:
@@ -237,7 +232,7 @@ class TrafficScheduler:
                 break
         agent_statistics = vec_env.venv.envs[0].unwrapped.get_statistics()
         model_env.close()
-        self.__save_statistics(agent_statistics)
+        self.__save_statistics(agent_statistics, 'ppo')
 
     def default_agent_evaluation(self) -> None:
         self.__setup_start_simulation_state()
