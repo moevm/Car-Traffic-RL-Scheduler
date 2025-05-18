@@ -7,6 +7,6 @@ __pycache__/
 *.pyc
 *.csv
 statistics/
-ppo_tensorboard/
+metrics_logs/
 pretrained_info/
 ../pics/
