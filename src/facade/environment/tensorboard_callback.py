@@ -43,10 +43,10 @@ class TensorboardCallback(BaseCallback):
             self.logger.record(f"rollout/mean_{reward_type}", mean_reward_type)
         if self.__rollout_counter % 100 == 0:
             self.model.save(
-                f"./pre_trained_models/pre_trained_model_{self.__rollout_counter * (self.locals["n_steps"] + 1) * 
+                f"./pretrained_info/trained_model_{self.__rollout_counter * (self.locals["n_steps"] + 1) * 
                                                           self.training_env.num_envs}")
             self.model.get_vec_normalize_env().save(
-                f'./pre_trained_models/pre_vec_normalize_{self.__rollout_counter * (self.locals["n_steps"] + 1) * 
+                f'./pretrained_info/vec_normalized_{self.__rollout_counter * (self.locals["n_steps"] + 1) * 
                                                           self.training_env.num_envs}.pkl')
         self.__rollout_counter += 1
 

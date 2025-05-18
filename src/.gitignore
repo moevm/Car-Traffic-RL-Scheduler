@@ -1,15 +1,12 @@
 .venv/
 .idea/
 .vscode/
-backup_006_012
 ../.idea/
 __pycache__/
 *.zip
 *.pyc
 *.csv
-pre_trained_models/
 statistics/
-ppo_traffic_lights_tensorboard/
-pre_trained_models_server
-server_models_ppo_traffic_lights_tensorboard
+ppo_tensorboard/
+pretrained_info/
 ../pics/
