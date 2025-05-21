@@ -163,18 +163,18 @@ class TrafficScheduler:
                                    norm_obs_keys=["density", "waiting", "time"])
             os.makedirs('metrics_logs', exist_ok=True)
             os.makedirs('pretrained_info', exist_ok=True)
-            model = PPO(policy='MultiInputPolicy',
-                        env=vec_env,
-                        tensorboard_log='./metrics_logs',
-                        learning_rate=get_linear_fn(start=1e-05, end=1e-06, end_fraction=0.5),
-                        n_steps=n_steps,
-                        batch_size=n_steps // 4,
-                        max_grad_norm=2,
-                        normalize_advantage=True,
-                        gae_lambda=0.95,
-                        ent_coef=0.005,
-                        vf_coef=0.5,
-                        device='cuda')
+            model = RecurrentPPO(policy='MultiInputPolicy',
+                                 env=vec_env,
+                                 tensorboard_log='./metrics_logs',
+                                 learning_rate=get_linear_fn(start=1e-05, end=1e-06, end_fraction=0.5),
+                                 n_steps=n_steps,
+                                 batch_size=n_steps // 4,
+                                 max_grad_norm=2,
+                                 normalize_advantage=True,
+                                 gae_lambda=0.95,
+                                 ent_coef=0.005,
+                                 vf_coef=0.5,
+                                 device='cuda')
             model.learn(total_timesteps=self.__simulation_params.DURATION,
                         progress_bar=True,
                         callback=TensorboardCallback(len(self.__traffic_lights_groups[0])),
@@ -203,7 +203,8 @@ class TrafficScheduler:
             vec_env.norm_reward = True
             vec_env.norm_obs = True
             custom_params = {'learning_rate': get_linear_fn(start=0.000266, end=0.000012, end_fraction=0.5)}
-            model = RecurrentPPO.load('pre_trained_model_1200000', env=vec_env, device='cuda', custom_objects=custom_params)
+            model = RecurrentPPO.load('pre_trained_model_1200000', env=vec_env, device='cuda',
+                                      custom_objects=custom_params)
             model.learn(total_timesteps=self.__simulation_params.DURATION,
                         progress_bar=True,
                         callback=TensorboardCallback(len(self.__traffic_lights_groups[0])),
