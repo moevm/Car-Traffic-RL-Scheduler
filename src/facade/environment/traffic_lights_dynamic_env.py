@@ -48,9 +48,9 @@ class TrafficLightsDynamicEnv(gym.Env):
         self.__vehicle_size = self._average_vehicle_size()
         self.__group_size = len(self.__traffic_lights_groups[0])
         self.__min_duration = 15
-        self.__max_duration = 90
+        self.__max_duration = 60
         self.__max_tls_neighbors = 4
-        self.__critical_duration = 180
+        self.__critical_duration = 90
         self.__max_phases = 6
         self.__i_window = 0
         observation_space = self.__make_observation_space()

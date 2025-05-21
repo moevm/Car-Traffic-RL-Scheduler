@@ -6,6 +6,7 @@ __pycache__/
 *.zip
 *.pyc
 *.csv
+*.pkl
 statistics/
 metrics_logs/
 pretrained_info/

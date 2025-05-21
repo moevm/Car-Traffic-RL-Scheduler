@@ -146,7 +146,7 @@ class TrafficScheduler:
     def learn(self):
         self.__setup_start_simulation_state()
         if not self.__new_checkpoint:
-            n_steps = 60 * len(self.__traffic_lights_groups)
+            n_steps = 90 * len(self.__traffic_lights_groups)
             vec_env = SubprocVecEnv([self._make_env_dynamic(self.__turned_on_traffic_lights,
                                                             self.__route_generator,
                                                             self.__transport_generator,
@@ -166,12 +166,12 @@ class TrafficScheduler:
             model = PPO(policy='MultiInputPolicy',
                         env=vec_env,
                         tensorboard_log='./metrics_logs',
-                        learning_rate=get_linear_fn(start=0.0001, end=0.000012, end_fraction=0.5),
+                        learning_rate=get_linear_fn(start=1e-05, end=1e-06, end_fraction=0.5),
                         n_steps=n_steps,
                         batch_size=n_steps // 4,
-                        max_grad_norm=0.8,
+                        max_grad_norm=2,
                         normalize_advantage=True,
-                        gae_lambda=0.8,
+                        gae_lambda=0.95,
                         ent_coef=0.005,
                         vf_coef=0.5,
                         device='cuda')
