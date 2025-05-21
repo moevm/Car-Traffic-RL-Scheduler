@@ -163,7 +163,7 @@ class TrafficScheduler:
                                    norm_obs_keys=["density", "waiting", "time"])
             os.makedirs('metrics_logs', exist_ok=True)
             os.makedirs('pretrained_info', exist_ok=True)
-            model = RecurrentPPO(policy='MultiInputPolicy',
+            model = RecurrentPPO(policy='MultiInputLstmPolicy',
                                  env=vec_env,
                                  tensorboard_log='./metrics_logs',
                                  learning_rate=get_linear_fn(start=1e-05, end=1e-06, end_fraction=0.5),
