@@ -41,7 +41,7 @@ class TrafficScheduler:
         self.__step = 0
         self.__traffic_logger = Logger("[TrafficInfo]")
         self.__learning_logger = Logger("[LearningInfo]")
-        self.__num_envs = 4
+        self.__num_envs = 8
         self.__turned_on_traffic_lights = []
         self.__traffic_lights_groups = []
         self.__n_lanes: int
@@ -146,7 +146,7 @@ class TrafficScheduler:
     def learn(self):
         self.__setup_start_simulation_state()
         if not self.__new_checkpoint:
-            n_steps = 90 * len(self.__traffic_lights_groups)
+            n_steps = 30 * len(self.__traffic_lights_groups)
             vec_env = SubprocVecEnv([self._make_env_dynamic(self.__turned_on_traffic_lights,
                                                             self.__route_generator,
                                                             self.__transport_generator,
@@ -156,7 +156,7 @@ class TrafficScheduler:
                                                             self.__traffic_lights_groups,
                                                             self.__n_lanes,
                                                             self.__edges,
-                                                            truncated_time=n_steps * 10,
+                                                            truncated_time=n_steps * 50,
                                                             gui=i == 0,
                                                             train_mode=True) for i in range(self.__num_envs)])
             vec_env = VecNormalize(vec_env, norm_obs=True, norm_reward=True,
@@ -166,10 +166,10 @@ class TrafficScheduler:
             model = RecurrentPPO(policy='MultiInputLstmPolicy',
                                  env=vec_env,
                                  tensorboard_log='./metrics_logs',
-                                 learning_rate=get_linear_fn(start=1e-05, end=1e-06, end_fraction=0.5),
+                                 learning_rate=get_linear_fn(start=5e-05, end=5e-06, end_fraction=0.5),
                                  n_steps=n_steps,
-                                 batch_size=n_steps // 4,
-                                 max_grad_norm=2,
+                                 batch_size=n_steps,
+                                 max_grad_norm=10,
                                  normalize_advantage=True,
                                  gae_lambda=0.95,
                                  ent_coef=0.005,
@@ -230,14 +230,25 @@ class TrafficScheduler:
                                                           gui=True,
                                                           train_mode=False)])
             vec_env = VecNormalize.load(normalized_env, vec_env)
-            vec_env.training, vec_env.norm_reward = False, False
-            model = PPO.load(model_weights, env=vec_env, device='cpu')
+            vec_env.training = False
+            vec_env.norm_reward = False
+
+            model = RecurrentPPO.load(model_weights, env=vec_env, device='cpu')
             model_env = model.get_env()
             obs = model_env.reset()
+            lstm_states = None
+            episode_starts = np.ones((model_env.num_envs,), dtype=np.float32)
+
             while True:
-                action, _ = model.predict(obs, deterministic=True)
-                obs, rewards, dones, info = model_env.step(action)
-                if all(dones):
+                action, lstm_states = model.predict(
+                    obs,
+                    state=lstm_states,
+                    deterministic=True,
+                    episode_start=episode_starts
+                )
+                obs, rewards, dones, infos = model_env.step(action)
+                episode_starts = dones.astype(np.float32)
+                if np.all(dones):
                     break
             agent_statistics = vec_env.venv.envs[0].unwrapped.get_statistics()
             model_env.close()
