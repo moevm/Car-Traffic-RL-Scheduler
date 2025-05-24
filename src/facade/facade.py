@@ -169,7 +169,7 @@ class TrafficScheduler:
                                  learning_rate=get_linear_fn(start=5e-05, end=5e-06, end_fraction=0.5),
                                  n_steps=n_steps,
                                  batch_size=n_steps,
-                                 max_grad_norm=10,
+                                 max_grad_norm=7.3,
                                  normalize_advantage=True,
                                  gae_lambda=0.95,
                                  ent_coef=0.005,
