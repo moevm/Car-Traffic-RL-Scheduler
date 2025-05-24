@@ -48,4 +48,8 @@ RUN python3 -m venv $VIRTUAL_ENV && \
 COPY ./src /app
 COPY entrypoint.sh /app/entrypoint.sh
 
+RUN groupadd -r user && useradd -g user user
+RUN chown -R user:user /app
+USER user
+
 CMD ["./entrypoint.sh"]
