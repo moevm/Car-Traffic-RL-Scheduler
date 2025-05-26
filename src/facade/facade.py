@@ -254,13 +254,21 @@ class TrafficScheduler:
             model_env.close()
             self.__save_statistics(agent_statistics, 'ppo')
 
+    def __reset_tls_after_loading(self):
+        traci.simulationStep()
+        for tls_id in self.__turned_on_traffic_lights:
+            current_logic = traci.trafficlight.getAllProgramLogics(tls_id)[0]
+            n_phases = len(current_logic.phases)
+            current_phase = traci.trafficlight.getPhase(tls_id)
+            traci.trafficlight.setPhase(tls_id, (current_phase + 1) % n_phases)
+
     def default_agent_evaluation(self) -> None:
         self.__setup_start_simulation_state()
         if not self.__new_checkpoint:
             sumo_cmd = ["sumo-gui", "-c", self.__SUMO_CONFIG]
             traci.start(sumo_cmd)
             traci.simulation.loadState(self.__CHECKPOINT_CONFIG)
-            traci.simulationStep()
+            self.__reset_tls_after_loading()
             default_agent_statistics = {
                 "mean_halting_number": [],
                 "running_cars": [],
