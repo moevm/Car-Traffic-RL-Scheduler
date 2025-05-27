@@ -146,7 +146,7 @@ class TrafficScheduler:
     def learn(self):
         self.__setup_start_simulation_state()
         if not self.__new_checkpoint:
-            n_steps = 30 * len(self.__traffic_lights_groups)
+            n_steps = 15 * len(self.__traffic_lights_groups)
             vec_env = SubprocVecEnv([self._make_env_dynamic(self.__turned_on_traffic_lights,
                                                             self.__route_generator,
                                                             self.__transport_generator,
@@ -157,7 +157,7 @@ class TrafficScheduler:
                                                             self.__n_lanes,
                                                             self.__edges,
                                                             truncated_time=n_steps * 50,
-                                                            gui=i == 0,
+                                                            gui=False,
                                                             train_mode=True) for i in range(self.__num_envs)])
             vec_env = VecNormalize(vec_env, norm_obs=True, norm_reward=True,
                                    norm_obs_keys=["density", "waiting", "time"])
@@ -166,7 +166,7 @@ class TrafficScheduler:
             model = RecurrentPPO(policy='MultiInputLstmPolicy',
                                  env=vec_env,
                                  tensorboard_log='./metrics_logs',
-                                 learning_rate=get_linear_fn(start=5e-05, end=5e-06, end_fraction=0.5),
+                                 learning_rate=get_linear_fn(start=5e-05, end=5e-07, end_fraction=0.75),
                                  n_steps=n_steps,
                                  batch_size=n_steps,
                                  max_grad_norm=7.3,
@@ -182,37 +182,6 @@ class TrafficScheduler:
             vec_env.save('vec_normalized.pkl')
             vec_env.close()
             model.save('trained_model')
-
-    def additional_learning(self):
-        self.__setup_start_simulation_state()
-        if not self.__new_checkpoint:
-            vec_env = SubprocVecEnv([self._make_env_dynamic(self.__turned_on_traffic_lights,
-                                                            self.__route_generator,
-                                                            self.__transport_generator,
-                                                            self.__step,
-                                                            self.__CHECKPOINT_CONFIG,
-                                                            self.__SUMO_CONFIG,
-                                                            self.__traffic_lights_groups,
-                                                            self.__n_lanes,
-                                                            self.__edges,
-                                                            truncated_time=5999,
-                                                            gui=i == 0,
-                                                            train_mode=True) for i in range(self.__num_envs)])
-            vec_env = VecNormalize.load('pre_vec_normalize_6731200.pkl', vec_env)
-            vec_env.training = True
-            vec_env.norm_reward = True
-            vec_env.norm_obs = True
-            custom_params = {'learning_rate': get_linear_fn(start=0.000266, end=0.000012, end_fraction=0.5)}
-            model = RecurrentPPO.load('pre_trained_model_1200000', env=vec_env, device='cuda',
-                                      custom_objects=custom_params)
-            model.learn(total_timesteps=self.__simulation_params.DURATION,
-                        progress_bar=True,
-                        callback=TensorboardCallback(len(self.__traffic_lights_groups[0])),
-                        log_interval=1,
-                        reset_num_timesteps=True)
-            vec_env.save('addition_vec_normalize.pkl')
-            vec_env.close()
-            model.save('additional_trained_model')
 
     def trained_model_evaluation(self, normalized_env: str, model_weights: str) -> None:
         self.__setup_start_simulation_state()
