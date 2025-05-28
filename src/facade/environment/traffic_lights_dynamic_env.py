@@ -190,7 +190,7 @@ class TrafficLightsDynamicEnv(gym.Env):
                     reward = self.__get_context_reward(max(spent, 1), action[i], -10)
                 else:
                     if action[i] == 1:
-                        print("duration:", spent)
+                        print(f"duration {spent} | tls_id {tls_id}")
                         if spent >= self.__min_duration:
                             traci.trafficlight.setPhase(tls_id, (current_phase + 1) % n_phases)
                         else:

@@ -104,7 +104,7 @@ def main(duration: int,
          lower_limit_of_intensity: float,
          sumo_config: str) -> None:
     """
-    This program generates a config with parameters for simulation.
+    This program generates a configuration with parameters for simulation.
     """
     net_config = extract_net_config(sumo_config)
     net = Net(net_config, [])

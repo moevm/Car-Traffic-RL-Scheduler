@@ -18,7 +18,8 @@ import pandas as pd
 
 
 class TrafficScheduler:
-    def __init__(self, sumo_config: str, simulation_parameters_file: str, new_checkpoint: str):
+    def __init__(self, sumo_config: str, simulation_parameters_file: str, new_checkpoint: str, enable_gui: bool):
+        self.__enable_gui = enable_gui
         self.__new_checkpoint = new_checkpoint
         self.__SUMO_CONFIG = sumo_config
         self.__NET_CONFIG = self.__extract_net_path()
@@ -115,16 +116,30 @@ class TrafficScheduler:
 
         return _init
 
-    def __save_statistics(self, statistics, info=''):
-        name = self.__SUMO_CONFIG.replace('configs/evaluating_configs/', '')
+    def __save_statistics(self, statistics: dict):
+        name = self.__SUMO_CONFIG.replace('configs/', '')
         name = name.replace('/', '_')
         name = name.replace('.sumocfg', '')
+        new_data = {}
+        json_path = f"statistics/runs_{name}"
+        for key, value in statistics.items():
+            if type(value) == list:
+                new_data[f"sum_{key}"] = [sum(value)]
+            else:
+                new_data[f"sum_{key}"] = [value]
+        if os.path.isfile(json_path):
+            with open(json_path, 'r') as json_file:
+                data = json.load(json_file)
+                keys = new_data.keys()
+                for key in keys:
+                    data[key].extend(new_data[key])
+        else:
+            data = new_data
+        with open(json_path, 'w') as json_file:
+            json.dump(data, json_file, indent=4)
         df = pd.DataFrame(statistics)
         os.makedirs('statistics', exist_ok=True)
-        if info == '':
-            df.to_csv(f'statistics/{name}')
-        else:
-            df.to_csv(f'statistics/{name}_{info}')
+        df.to_csv(f'statistics/{name}')
 
     def __setup_start_simulation_state(self):
         sumo_cmd = ["sumo", "-c", self.__SUMO_CONFIG]
@@ -157,7 +172,7 @@ class TrafficScheduler:
                                                             self.__n_lanes,
                                                             self.__edges,
                                                             truncated_time=n_steps * 50,
-                                                            gui=False,
+                                                            gui=(i == 0) and self.__enable_gui,
                                                             train_mode=True) for i in range(self.__num_envs)])
             vec_env = VecNormalize(vec_env, norm_obs=True, norm_reward=True,
                                    norm_obs_keys=["density", "waiting", "time"])
@@ -183,7 +198,7 @@ class TrafficScheduler:
             vec_env.close()
             model.save('trained_model')
 
-    def trained_model_evaluation(self, normalized_env: str, model_weights: str) -> None:
+    def trained_model_evaluation(self, normalized_env: str, model_weights: str, duration: int) -> None:
         self.__setup_start_simulation_state()
         if not self.__new_checkpoint:
             vec_env = DummyVecEnv([self._make_env_dynamic(self.__turned_on_traffic_lights,
@@ -195,8 +210,8 @@ class TrafficScheduler:
                                                           self.__traffic_lights_groups,
                                                           self.__n_lanes,
                                                           self.__edges,
-                                                          truncated_time=5999,
-                                                          gui=True,
+                                                          truncated_time=duration,
+                                                          gui=self.__enable_gui,
                                                           train_mode=False)])
             vec_env = VecNormalize.load(normalized_env, vec_env)
             vec_env.training = False
@@ -221,7 +236,7 @@ class TrafficScheduler:
                     break
             agent_statistics = vec_env.venv.envs[0].unwrapped.get_statistics()
             model_env.close()
-            self.__save_statistics(agent_statistics, 'ppo')
+            self.__save_statistics(agent_statistics)
 
     def __reset_tls_after_loading(self):
         traci.simulationStep()
@@ -231,10 +246,13 @@ class TrafficScheduler:
             current_phase = traci.trafficlight.getPhase(tls_id)
             traci.trafficlight.setPhase(tls_id, (current_phase + 1) % n_phases)
 
-    def default_agent_evaluation(self) -> None:
+    def default_agent_evaluation(self, duration: int) -> None:
         self.__setup_start_simulation_state()
         if not self.__new_checkpoint:
-            sumo_cmd = ["sumo-gui", "-c", self.__SUMO_CONFIG]
+            if self.__enable_gui:
+                sumo_cmd = ["sumo-gui", "-c", self.__SUMO_CONFIG]
+            else:
+                sumo_cmd = ["sumo", "-c", self.__SUMO_CONFIG]
             traci.start(sumo_cmd)
             traci.simulation.loadState(self.__CHECKPOINT_CONFIG)
             self.__reset_tls_after_loading()
@@ -246,7 +264,6 @@ class TrafficScheduler:
                 "arrived_number": [],
                 "step": []
             }
-            duration = 6000
             schedule = self.__transport_generator.generate_schedule_for_poisson_flow(self.__step + 1, duration)
             edges = self.__net.get_edges()
             for i in range(duration):
