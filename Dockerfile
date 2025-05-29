@@ -46,10 +46,12 @@ RUN python3 -m venv $VIRTUAL_ENV && \
     apt-get clean
 
 COPY ./src /app
-COPY entrypoint.sh /app/entrypoint.sh
+COPY *.sh /app
+RUN groupadd -r -g 1001 user && \
+    useradd -m -u 1001 -g 1001 user
+RUN chown -R 1000:1000 /app
+RUN chmod +x /app/entrypoint.sh /app/train.sh /app/evaluate.sh /app/evaluate_all_agents.sh
+USER 1000:1000
 
-RUN groupadd -r user && useradd -g user user
-RUN chown -R user:user /app
-USER user
-
-CMD ["./entrypoint.sh"]
+ENTRYPOINT ["./entrypoint.sh"]
+CMD ["./train.sh"]

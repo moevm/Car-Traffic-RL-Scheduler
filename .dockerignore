@@ -1,9 +1,11 @@
 *.md
-/src/.idea/
-./vscode/
+.idea/
+vscode/
 /src/.venv/
-/src/ppo_traffic_lights_tensorboard/
-/src/pre_training/
+/src/metrics_logs/
+/src/pretrained_info/
 src/.gitignore
 __pycache__/
 *.pyc
+/pics/
+/reports/

@@ -10,6 +10,7 @@ default_types=(
 trained_type="static_tls/cycle_time_10000"
 
 echo "[$(date)]"
+
 for n in "${maps[@]}"; do
   for tls in "${default_types[@]}"; do
     for run in {1..5}; do

@@ -1,11 +1,22 @@
 #!/bin/bash
-export SUMO_HOME="/usr/local/share/sumo"
 
+set -e
+
+export SUMO_HOME="/usr/local/share/sumo"
 source sumovenv/bin/activate
 
-tensorboard --logdir /app/metrcis_logs --host=0.0.0.0 &
+SCRIPT="$1"
+shift
 
-exec python3 main.py \
-  -s configs/static_tls/cycle_time_10000/rand_40.sumocfg \
-  -p configs/simulation_parameters/rand_40.json \
-  -m train
+if [[ -z "$SCRIPT" ]]; then
+  echo "No script specified. Use: train.sh or evaluate.sh."
+  exit 1
+fi
+
+if [[ ! -x "$SCRIPT" ]]; then
+  echo "Script $SCRIPT not found or not executable."
+  exit 1
+fi
+
+echo "Running: $SCRIPT $@"
+exec "./$SCRIPT" "$@"
