@@ -15,7 +15,10 @@ def main(file: str):
         data = json.load(json_file)
         for key, runs_list in data.items():
             print(key)
-            print(f"\tmean = {np.mean(runs_list)}\n\tstd = {np.std(runs_list)}")
+            mean = np.mean(runs_list)
+            std = np.std(runs_list, ddof=1)
+            sem = std / np.sqrt(len(runs_list))
+            print(f"\tmean = {mean}\n\tsem = {sem}")
 
 
 if __name__ == "__main__":

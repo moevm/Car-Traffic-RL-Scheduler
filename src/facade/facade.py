@@ -35,6 +35,7 @@ class TrafficScheduler:
         self.__net.parallel_find_routes()
         self.__route_generator = RouteGenerator(self.__net)
         self.__last_target_nodes_data = []
+        self.__eval_duration: int
         self.__transport_generator = TransportGenerator(self.__simulation_params.intensities,
                                                         self.__simulation_params.poisson_generators_edges,
                                                         self.__simulation_params.DURATION, self.__net.get_edges(),
@@ -123,10 +124,10 @@ class TrafficScheduler:
         new_data = {}
         json_path = f"statistics/runs_{name}"
         for key, value in statistics.items():
-            if type(value) == list:
+            if type(value) == list and key != 'step' and key != 'arrived_number':
+                new_data[f"mean_{key}"] = [sum(value) / self.__eval_duration]
+            elif key != 'arrived_number':
                 new_data[f"sum_{key}"] = [sum(value)]
-            else:
-                new_data[f"sum_{key}"] = [value]
         if os.path.isfile(json_path):
             with open(json_path, 'r') as json_file:
                 data = json.load(json_file)
@@ -199,6 +200,7 @@ class TrafficScheduler:
             model.save('trained_model')
 
     def trained_model_evaluation(self, normalized_env: str, model_weights: str, duration: int) -> None:
+        self.__eval_duration = duration
         self.__setup_start_simulation_state()
         if not self.__new_checkpoint:
             vec_env = DummyVecEnv([self._make_env_dynamic(self.__turned_on_traffic_lights,
@@ -258,7 +260,6 @@ class TrafficScheduler:
             self.__reset_tls_after_loading()
             default_agent_statistics = {
                 "mean_halting_number": [],
-                "running_cars": [],
                 "mean_waiting_time": [],
                 "mean_speed": [],
                 "arrived_number": [],
@@ -277,7 +278,6 @@ class TrafficScheduler:
                 for vehicle in vehicles:
                     speed += traci.vehicle.getSpeed(vehicle)
                 default_agent_statistics["mean_halting_number"].append(halting_number / len(edges))
-                default_agent_statistics["running_cars"].append(len(vehicles))
                 default_agent_statistics["mean_waiting_time"].append(waiting_time / len(edges))
                 default_agent_statistics["mean_speed"].append(speed / len(vehicles))
                 default_agent_statistics["arrived_number"].append(traci.simulation.getArrivedNumber())

@@ -14,4 +14,5 @@ docker run -it --rm \
   --device /dev/dri \
   -p 6006:6006 \
   --gpus all \
+  -d \
   docker-sumo "$@"
