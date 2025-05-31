@@ -1,5 +1,5 @@
 {
-    "DURATION": 24000000,
+    "DURATION": 48000000,
     "INIT_DELAY": 20,
     "ITERATIONS": 10,
     "PART_OF_THE_PATH": 0.3,

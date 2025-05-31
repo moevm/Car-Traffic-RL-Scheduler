@@ -1,11 +1,22 @@
 #!/bin/bash
-export SUMO_HOME="/usr/local/share/sumo"
 
+set -e
+
+export SUMO_HOME="/usr/local/share/sumo"
 source sumovenv/bin/activate
 
-tensorboard --logdir /app/ppo_traffic_lights_tensorboard --host=0.0.0.0 &
+SCRIPT="$1"
+shift
 
-exec python3 main.py \
-  -s configs/learning-configs/learning_small.sumocfg \
-  -p configs/learning-configs/learning_parameters.json \
-  -m train
+if [[ -z "$SCRIPT" ]]; then
+  echo "No script specified. Use: train.sh or evaluate.sh."
+  exit 1
+fi
+
+if [[ ! -x "$SCRIPT" ]]; then
+  echo "Script $SCRIPT not found or not executable."
+  exit 1
+fi
+
+echo "Running: $SCRIPT $@"
+exec "./$SCRIPT" "$@"

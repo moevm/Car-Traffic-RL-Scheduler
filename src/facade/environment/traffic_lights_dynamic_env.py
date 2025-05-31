@@ -60,7 +60,6 @@ class TrafficLightsDynamicEnv(gym.Env):
         self.__vehicles_on_lanes_before = {i: [] for i in range(len(self.__traffic_lights_groups))}
         self.__statistics = {
             "mean_halting_number": [],
-            "running_cars": [],
             "mean_waiting_time": [],
             "mean_speed": [],
             "arrived_number": [],
@@ -190,7 +189,7 @@ class TrafficLightsDynamicEnv(gym.Env):
                     reward = self.__get_context_reward(max(spent, 1), action[i], -10)
                 else:
                     if action[i] == 1:
-                        print("duration:", spent)
+                        print(f"duration {spent} | tls_id {tls_id}")
                         if spent >= self.__min_duration:
                             traci.trafficlight.setPhase(tls_id, (current_phase + 1) % n_phases)
                         else:
@@ -302,7 +301,6 @@ class TrafficLightsDynamicEnv(gym.Env):
         for vehicle in vehicles:
             speed += traci.vehicle.getSpeed(vehicle)
         self.__statistics["mean_halting_number"].append(halting_number / len(self.__edges))
-        self.__statistics["running_cars"].append(len(vehicles))
         self.__statistics["mean_waiting_time"].append(waiting_time / len(self.__edges))
         self.__statistics["mean_speed"].append(speed / len(vehicles))
         self.__statistics["arrived_number"].append(traci.simulation.getArrivedNumber())

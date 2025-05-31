@@ -18,7 +18,8 @@ import pandas as pd
 
 
 class TrafficScheduler:
-    def __init__(self, sumo_config: str, simulation_parameters_file: str, new_checkpoint: str):
+    def __init__(self, sumo_config: str, simulation_parameters_file: str, new_checkpoint: str, enable_gui: bool):
+        self.__enable_gui = enable_gui
         self.__new_checkpoint = new_checkpoint
         self.__SUMO_CONFIG = sumo_config
         self.__NET_CONFIG = self.__extract_net_path()
@@ -34,6 +35,7 @@ class TrafficScheduler:
         self.__net.parallel_find_routes()
         self.__route_generator = RouteGenerator(self.__net)
         self.__last_target_nodes_data = []
+        self.__eval_duration: int
         self.__transport_generator = TransportGenerator(self.__simulation_params.intensities,
                                                         self.__simulation_params.poisson_generators_edges,
                                                         self.__simulation_params.DURATION, self.__net.get_edges(),
@@ -41,7 +43,7 @@ class TrafficScheduler:
         self.__step = 0
         self.__traffic_logger = Logger("[TrafficInfo]")
         self.__learning_logger = Logger("[LearningInfo]")
-        self.__num_envs = 4
+        self.__num_envs = 8
         self.__turned_on_traffic_lights = []
         self.__traffic_lights_groups = []
         self.__n_lanes: int
@@ -115,16 +117,30 @@ class TrafficScheduler:
 
         return _init
 
-    def __save_statistics(self, statistics, info=''):
-        name = self.__SUMO_CONFIG.replace('configs/evaluating_configs/', '')
+    def __save_statistics(self, statistics: dict):
+        name = self.__SUMO_CONFIG.replace('configs/', '')
         name = name.replace('/', '_')
         name = name.replace('.sumocfg', '')
+        new_data = {}
+        json_path = f"statistics/runs_{name}"
+        for key, value in statistics.items():
+            if type(value) == list and key != 'step' and key != 'arrived_number':
+                new_data[f"mean_{key}"] = [sum(value) / self.__eval_duration]
+            elif key != 'arrived_number':
+                new_data[f"sum_{key}"] = [sum(value)]
+        if os.path.isfile(json_path):
+            with open(json_path, 'r') as json_file:
+                data = json.load(json_file)
+                keys = new_data.keys()
+                for key in keys:
+                    data[key].extend(new_data[key])
+        else:
+            data = new_data
+        with open(json_path, 'w') as json_file:
+            json.dump(data, json_file, indent=4)
         df = pd.DataFrame(statistics)
         os.makedirs('statistics', exist_ok=True)
-        if info == '':
-            df.to_csv(f'statistics/{name}')
-        else:
-            df.to_csv(f'statistics/{name}_{info}')
+        df.to_csv(f'statistics/{name}')
 
     def __setup_start_simulation_state(self):
         sumo_cmd = ["sumo", "-c", self.__SUMO_CONFIG]
@@ -146,7 +162,7 @@ class TrafficScheduler:
     def learn(self):
         self.__setup_start_simulation_state()
         if not self.__new_checkpoint:
-            n_steps = 90 * len(self.__traffic_lights_groups)
+            n_steps = 15 * len(self.__traffic_lights_groups)
             vec_env = SubprocVecEnv([self._make_env_dynamic(self.__turned_on_traffic_lights,
                                                             self.__route_generator,
                                                             self.__transport_generator,
@@ -156,25 +172,25 @@ class TrafficScheduler:
                                                             self.__traffic_lights_groups,
                                                             self.__n_lanes,
                                                             self.__edges,
-                                                            truncated_time=n_steps * 10,
-                                                            gui=i == 0,
+                                                            truncated_time=n_steps * 50,
+                                                            gui=(i == 0) and self.__enable_gui,
                                                             train_mode=True) for i in range(self.__num_envs)])
             vec_env = VecNormalize(vec_env, norm_obs=True, norm_reward=True,
                                    norm_obs_keys=["density", "waiting", "time"])
             os.makedirs('metrics_logs', exist_ok=True)
             os.makedirs('pretrained_info', exist_ok=True)
-            model = PPO(policy='MultiInputPolicy',
-                        env=vec_env,
-                        tensorboard_log='./metrics_logs',
-                        learning_rate=get_linear_fn(start=1e-05, end=1e-06, end_fraction=0.5),
-                        n_steps=n_steps,
-                        batch_size=n_steps // 4,
-                        max_grad_norm=2,
-                        normalize_advantage=True,
-                        gae_lambda=0.95,
-                        ent_coef=0.005,
-                        vf_coef=0.5,
-                        device='cuda')
+            model = RecurrentPPO(policy='MultiInputLstmPolicy',
+                                 env=vec_env,
+                                 tensorboard_log='./metrics_logs',
+                                 learning_rate=get_linear_fn(start=5e-05, end=5e-07, end_fraction=0.75),
+                                 n_steps=n_steps,
+                                 batch_size=n_steps,
+                                 max_grad_norm=7.3,
+                                 normalize_advantage=True,
+                                 gae_lambda=0.95,
+                                 ent_coef=0.005,
+                                 vf_coef=0.5,
+                                 device='cuda')
             model.learn(total_timesteps=self.__simulation_params.DURATION,
                         progress_bar=True,
                         callback=TensorboardCallback(len(self.__traffic_lights_groups[0])),
@@ -183,37 +199,8 @@ class TrafficScheduler:
             vec_env.close()
             model.save('trained_model')
 
-    def additional_learning(self):
-        self.__setup_start_simulation_state()
-        if not self.__new_checkpoint:
-            vec_env = SubprocVecEnv([self._make_env_dynamic(self.__turned_on_traffic_lights,
-                                                            self.__route_generator,
-                                                            self.__transport_generator,
-                                                            self.__step,
-                                                            self.__CHECKPOINT_CONFIG,
-                                                            self.__SUMO_CONFIG,
-                                                            self.__traffic_lights_groups,
-                                                            self.__n_lanes,
-                                                            self.__edges,
-                                                            truncated_time=5999,
-                                                            gui=i == 0,
-                                                            train_mode=True) for i in range(self.__num_envs)])
-            vec_env = VecNormalize.load('pre_vec_normalize_6731200.pkl', vec_env)
-            vec_env.training = True
-            vec_env.norm_reward = True
-            vec_env.norm_obs = True
-            custom_params = {'learning_rate': get_linear_fn(start=0.000266, end=0.000012, end_fraction=0.5)}
-            model = RecurrentPPO.load('pre_trained_model_1200000', env=vec_env, device='cuda', custom_objects=custom_params)
-            model.learn(total_timesteps=self.__simulation_params.DURATION,
-                        progress_bar=True,
-                        callback=TensorboardCallback(len(self.__traffic_lights_groups[0])),
-                        log_interval=1,
-                        reset_num_timesteps=True)
-            vec_env.save('addition_vec_normalize.pkl')
-            vec_env.close()
-            model.save('additional_trained_model')
-
-    def trained_model_evaluation(self, normalized_env: str, model_weights: str) -> None:
+    def trained_model_evaluation(self, normalized_env: str, model_weights: str, duration: int) -> None:
+        self.__eval_duration = duration
         self.__setup_start_simulation_state()
         if not self.__new_checkpoint:
             vec_env = DummyVecEnv([self._make_env_dynamic(self.__turned_on_traffic_lights,
@@ -225,39 +212,59 @@ class TrafficScheduler:
                                                           self.__traffic_lights_groups,
                                                           self.__n_lanes,
                                                           self.__edges,
-                                                          truncated_time=5999,
-                                                          gui=True,
+                                                          truncated_time=duration,
+                                                          gui=self.__enable_gui,
                                                           train_mode=False)])
             vec_env = VecNormalize.load(normalized_env, vec_env)
-            vec_env.training, vec_env.norm_reward = False, False
-            model = PPO.load(model_weights, env=vec_env, device='cpu')
+            vec_env.training = False
+            vec_env.norm_reward = False
+
+            model = RecurrentPPO.load(model_weights, env=vec_env, device='cpu')
             model_env = model.get_env()
             obs = model_env.reset()
+            lstm_states = None
+            episode_starts = np.ones((model_env.num_envs,), dtype=np.float32)
+
             while True:
-                action, _ = model.predict(obs, deterministic=True)
-                obs, rewards, dones, info = model_env.step(action)
-                if all(dones):
+                action, lstm_states = model.predict(
+                    obs,
+                    state=lstm_states,
+                    deterministic=True,
+                    episode_start=episode_starts
+                )
+                obs, rewards, dones, infos = model_env.step(action)
+                episode_starts = dones.astype(np.float32)
+                if np.all(dones):
                     break
             agent_statistics = vec_env.venv.envs[0].unwrapped.get_statistics()
             model_env.close()
-            self.__save_statistics(agent_statistics, 'ppo')
+            self.__save_statistics(agent_statistics)
 
-    def default_agent_evaluation(self) -> None:
+    def __reset_tls_after_loading(self):
+        traci.simulationStep()
+        for tls_id in self.__turned_on_traffic_lights:
+            current_logic = traci.trafficlight.getAllProgramLogics(tls_id)[0]
+            n_phases = len(current_logic.phases)
+            current_phase = traci.trafficlight.getPhase(tls_id)
+            traci.trafficlight.setPhase(tls_id, (current_phase + 1) % n_phases)
+
+    def default_agent_evaluation(self, duration: int) -> None:
         self.__setup_start_simulation_state()
         if not self.__new_checkpoint:
-            sumo_cmd = ["sumo-gui", "-c", self.__SUMO_CONFIG]
+            if self.__enable_gui:
+                sumo_cmd = ["sumo-gui", "-c", self.__SUMO_CONFIG]
+            else:
+                sumo_cmd = ["sumo", "-c", self.__SUMO_CONFIG]
             traci.start(sumo_cmd)
             traci.simulation.loadState(self.__CHECKPOINT_CONFIG)
-            traci.simulationStep()
+            self.__reset_tls_after_loading()
             default_agent_statistics = {
                 "mean_halting_number": [],
-                "running_cars": [],
                 "mean_waiting_time": [],
                 "mean_speed": [],
                 "arrived_number": [],
                 "step": []
             }
-            duration = 6000
             schedule = self.__transport_generator.generate_schedule_for_poisson_flow(self.__step + 1, duration)
             edges = self.__net.get_edges()
             for i in range(duration):
@@ -271,7 +278,6 @@ class TrafficScheduler:
                 for vehicle in vehicles:
                     speed += traci.vehicle.getSpeed(vehicle)
                 default_agent_statistics["mean_halting_number"].append(halting_number / len(edges))
-                default_agent_statistics["running_cars"].append(len(vehicles))
                 default_agent_statistics["mean_waiting_time"].append(waiting_time / len(edges))
                 default_agent_statistics["mean_speed"].append(speed / len(vehicles))
                 default_agent_statistics["arrived_number"].append(traci.simulation.getArrivedNumber())
