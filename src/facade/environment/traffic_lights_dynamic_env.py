@@ -18,17 +18,21 @@ class TrafficLightsDynamicEnv(gym.Env):
                  checkpoint_file: str,
                  sumo_config: str,
                  traffic_lights_groups: list[list[str]],
+                 remain_tls: list[str],
                  edges: list[str],
+                 cycle_time: int,
                  truncated_time: int,
                  n_lanes: int,
                  gui: bool = False,
                  train_mode: bool = True):
+        self.__cycle_time = cycle_time
         self.__edges = edges
         self.__truncated_time = truncated_time
         self.__gui = gui
         self.__train_mode = train_mode
         self.__n_lanes = n_lanes
         self.__traffic_lights_groups = traffic_lights_groups
+        self.__remain_tls = remain_tls
         self.__schedule = []
         self.__route_generator = route_generator
         self.__transport_generator = transport_generator
@@ -123,6 +127,27 @@ class TrafficLightsDynamicEnv(gym.Env):
     def _normalize_reward(x: float, x_min: float, x_max: float, a: float, b: float) -> float:
         return a + (x - x_min) * (b - a) / (x_max - x_min)
 
+    def __assign_cycle_time_for_remain_tls(self):
+        sum_yellow_duration = {tls_id: 0 for tls_id in self.__remain_tls}
+        n_yellow_states = {tls_id: 0 for tls_id in self.__remain_tls}
+        for tls_id in self.__remain_tls:
+            logic = traci.trafficlight.getAllProgramLogics(tls_id)[0]
+            phases = logic.phases
+            for phase in phases:
+                if 'y' in phase.state:
+                    sum_yellow_duration[tls_id] += phase.duration
+                    n_yellow_states[tls_id] += 1
+        for tls_id in self.__remain_tls:
+            logic = traci.trafficlight.getAllProgramLogics(tls_id)[0]
+            phases = logic.phases
+            for phase in phases:
+                if 'y' not in phase.state:
+                    phase.duration = (self.__cycle_time - sum_yellow_duration[tls_id]) // (
+                                len(phases) - n_yellow_states[tls_id])
+                phase.minDur = phase.duration
+                phase.maxDur = phase.duration
+            traci.trafficlight.setCompleteRedYellowGreenDefinition(tls_id, logic)
+
     def reset(
             self,
             *,
@@ -132,6 +157,7 @@ class TrafficLightsDynamicEnv(gym.Env):
         self.__n_steps_capacity = {tls_id: 0 for tls_id in self.__traffic_lights_ids}
         traci.simulation.loadState(self.__checkpoint_file)
         traci.simulationStep()
+        self.__assign_cycle_time_for_remain_tls()
         for tls_id in self.__traffic_lights_ids:
             current_logic = traci.trafficlight.getAllProgramLogics(tls_id)[0]
             n_phases = len(current_logic.phases)

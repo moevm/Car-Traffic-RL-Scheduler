@@ -31,7 +31,7 @@ class Net:
         (self.__restore_path_matrix, self.__restore_path_matrix_for_way_back_routes,
          self.__paths_for_way_back_routes) = {}, {}, {}
         self.__edges_dict = self.__make_edges_dict()
-        self.__turned_on_traffic_lights_ids, self.__traffic_lights_groups = [], []
+        self.__turned_on_traffic_lights_ids, self.__traffic_lights_groups, self.__remain_tls = [], [], []
         self.__paths = {}
         for edge in poisson_generators_edges:
             self.__poisson_generators_to_nodes.append(self.__sumolib_net.getEdge(edge).getToNode().getID())
@@ -360,6 +360,7 @@ class Net:
             print(
                 f"These traffic lights are not included in any of the groups: {remain_tls}. "
                 f"\nThey will not learn, they will use the default settings")
+        self.__remain_tls = list(remain_tls)
 
     def get_restore_path_matrix(self) -> dict[str, dict[str, str | None]]:
         return self.__restore_path_matrix
@@ -403,6 +404,9 @@ class Net:
 
     def get_traffic_lights_groups(self):
         return self.__traffic_lights_groups
+
+    def get_remain_tls(self):
+        return self.__remain_tls
 
     def get_shortest_path(self, start_node: str, prev_node: Optional[str], end_node: str) -> list[str]:
         return self.__paths[(start_node, prev_node)][end_node]

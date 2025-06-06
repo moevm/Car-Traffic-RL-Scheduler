@@ -18,7 +18,9 @@ import pandas as pd
 
 
 class TrafficScheduler:
-    def __init__(self, sumo_config: str, simulation_parameters_file: str, new_checkpoint: str, enable_gui: bool):
+    def __init__(self, sumo_config: str, simulation_parameters_file: str, new_checkpoint: str, enable_gui: bool,
+                 cycle_time: int):
+        self.__cycle_time = cycle_time
         self.__enable_gui = enable_gui
         self.__new_checkpoint = new_checkpoint
         self.__SUMO_CONFIG = sumo_config
@@ -28,7 +30,7 @@ class TrafficScheduler:
         self.__simulation_params = self.__get_simulation_params_from_file()
         self.__net = Net(self.__NET_CONFIG,
                          self.__simulation_params.poisson_generators_edges,
-                         self.__simulation_params.CPU_SCALE
+                         self.__simulation_params.CPU_SCALE,
                          )
         self.__net.parallel_make_restore_path_matrix()
         self.__net.parallel_find_way_back()
@@ -94,8 +96,10 @@ class TrafficScheduler:
                           checkpoint_file: str,
                           sumo_config: str,
                           traffic_lights_groups: list[list[str]],
+                          remain_tls: list[str],
                           n_lanes: int,
                           edges: list[str],
+                          cycle_time: int,
                           truncated_time: int,
                           gui: bool,
                           train_mode: bool):
@@ -108,7 +112,9 @@ class TrafficScheduler:
                 checkpoint_file,
                 sumo_config,
                 traffic_lights_groups,
+                remain_tls,
                 edges,
+                cycle_time,
                 truncated_time,
                 n_lanes,
                 gui,
@@ -124,9 +130,9 @@ class TrafficScheduler:
         new_data = {}
         json_path = f"statistics/runs_{name}"
         for key, value in statistics.items():
-            if type(value) == list and key != 'step' and key != 'arrived_number':
-                new_data[f"mean_{key}"] = [sum(value) / self.__eval_duration]
-            elif key != 'arrived_number':
+            if key != 'step' and key != 'arrived_number':
+                new_data[f"mean_{key}"] = [sum(value)]
+            elif key == 'arrived_number':
                 new_data[f"sum_{key}"] = [sum(value)]
         if os.path.isfile(json_path):
             with open(json_path, 'r') as json_file:
@@ -152,6 +158,7 @@ class TrafficScheduler:
         self.__generate_initial_traffic()
         self.__turned_on_traffic_lights = self.__net.get_turned_on_traffic_lights_ids()
         self.__traffic_lights_groups = self.__net.get_traffic_lights_groups()
+        self.__remain_tls = self.__net.get_remain_tls()
         self.__n_lanes = self.__net.get_number_of_lanes() * 4
         self.__learning_logger.print_info(Message.training_started)
         self.__edges = self.__net.get_edges()
@@ -170,8 +177,10 @@ class TrafficScheduler:
                                                             self.__CHECKPOINT_CONFIG,
                                                             self.__SUMO_CONFIG,
                                                             self.__traffic_lights_groups,
+                                                            self.__remain_tls,
                                                             self.__n_lanes,
                                                             self.__edges,
+                                                            self.__cycle_time,
                                                             truncated_time=n_steps * 50,
                                                             gui=(i == 0) and self.__enable_gui,
                                                             train_mode=True) for i in range(self.__num_envs)])
@@ -210,8 +219,10 @@ class TrafficScheduler:
                                                           self.__CHECKPOINT_CONFIG,
                                                           self.__SUMO_CONFIG,
                                                           self.__traffic_lights_groups,
+                                                          self.__remain_tls,
                                                           self.__n_lanes,
                                                           self.__edges,
+                                                          self.__cycle_time,
                                                           truncated_time=duration,
                                                           gui=self.__enable_gui,
                                                           train_mode=False)])
