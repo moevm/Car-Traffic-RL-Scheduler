@@ -1,5 +1,4 @@
 import click
-from pygments.lexer import default
 
 from facade.facade import TrafficScheduler
 
@@ -17,13 +16,15 @@ from facade.facade import TrafficScheduler
               help='Make new checkpoint or take from configs/checkpoints')
 @click.option('--enable-gui', '-g', default=False, type=bool, help='Show gui.')
 @click.option('--duration', '-d', default=6000, type=int, help='Duration of evaluation.')
+@click.option('--cycle-time', '-t', default=90, type=int, help='Cycle time for traffic lights that did not '
+                                                               'fit into any group.')
 def main(sumo_config: str, simulation_parameters: str, mode: str, vec_normalized: str, model_weights,
-         new_checkpoint: str, enable_gui: bool, duration: int) -> None:
+         new_checkpoint: str, enable_gui: bool, duration: int, cycle_time: int) -> None:
     """
     This program is designed for training an agent using the Recurrent PPO algorithm and evaluating the trained agent.
     The program also allows evaluating the metrics of standard SUMO agents.
     """
-    scheduler = TrafficScheduler(sumo_config, simulation_parameters, new_checkpoint, enable_gui)
+    scheduler = TrafficScheduler(sumo_config, simulation_parameters, new_checkpoint, enable_gui, cycle_time)
     match mode:
         case 'train':
             scheduler.learn()

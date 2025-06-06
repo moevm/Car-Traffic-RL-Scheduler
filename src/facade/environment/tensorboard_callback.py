@@ -14,7 +14,6 @@ class TensorboardCallback(BaseCallback):
             "normalized_sum_reward": np.zeros(shape=(self.training_env.num_envs,), dtype=np.float32),
             "sum_reward": np.zeros(shape=(self.training_env.num_envs,), dtype=np.float32),
             "step_capacity": np.zeros(shape=(self.training_env.num_envs,), dtype=np.float32),
-            "phase_capacity": np.zeros(shape=(self.training_env.num_envs,), dtype=np.float32),
             "tls_reward": np.zeros(shape=(self.training_env.num_envs,), dtype=np.float32),
             "halting_reward": np.zeros(shape=(self.training_env.num_envs,), dtype=np.float32),
         }
