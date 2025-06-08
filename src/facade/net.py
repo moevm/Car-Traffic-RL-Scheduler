@@ -1,3 +1,5 @@
+import numpy as np
+import sumolib.net
 import traci
 import heapq
 import random
@@ -8,6 +10,9 @@ from multiprocessing import Pool, cpu_count
 from facade.structures import NodePair
 from facade.logger.network_logger import *
 from collections import deque
+import kmedoids as km
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 
 
 class Net:
@@ -17,6 +22,8 @@ class Net:
         self.__CPU_SCALE = cpu_scale
         self.__NET_CONFIG = net_config
         self.__sumolib_net = readNet(net_config)
+        # потенциальная ошибка: id светофора и узла могут не совпадать
+        self.__tls_ids = [tls.getID() for tls in self.__sumolib_net.getTrafficLights()]
         self.__network_logger = NetworkLogger()
         self.__INF = float("inf")
         self.__nodes = [node.getID() for node in self.__sumolib_net.getNodes()]
@@ -73,11 +80,11 @@ class Net:
         return local_paths
 
     def parallel_find_routes(self) -> None:
-        to_nodes = self.__extreme_nodes + self.__poisson_generators_to_nodes
+        to_nodes = self.__extreme_nodes + self.__tls_ids + self.__poisson_generators_to_nodes
         args_list = []
         for i, to_node in enumerate(to_nodes):
-            if i >= len(self.__extreme_nodes):
-                args = (self.__poisson_generators_from_nodes[i - len(self.__extreme_nodes)],
+            if i >= len(self.__extreme_nodes + self.__tls_ids):
+                args = (self.__poisson_generators_from_nodes[i - len(self.__extreme_nodes + self.__tls_ids)],
                         to_node,
                         self.__nodes,
                         self.__graph,
@@ -85,7 +92,7 @@ class Net:
                         self.__restore_path_matrix,
                         self.__paths_for_way_back_routes,
                         self.__restore_path_matrix_for_way_back_routes,
-                        self.__poisson_generators_edges[i - len(self.__extreme_nodes)])
+                        self.__poisson_generators_edges[i - len(self.__extreme_nodes + self.__tls_ids)])
             else:
                 args = (None,
                         to_node,
@@ -124,13 +131,13 @@ class Net:
         self.__network_logger.step_progress_bar()
 
     def parallel_make_restore_path_matrix(self) -> None:
-        start_nodes = self.__extreme_nodes + self.__poisson_generators_to_nodes
+        start_nodes = self.__extreme_nodes + self.__tls_ids + self.__poisson_generators_to_nodes
         args_list = []
         for i, start_node in enumerate(start_nodes):
-            if i < len(self.__extreme_nodes):
+            if i < len(self.__extreme_nodes + self.__tls_ids):
                 args = (start_node, None, self.__INF, self.__nodes, self.__graph, self.__edges_length)
             else:
-                prev_node = self.__poisson_generators_from_nodes[i - len(self.__extreme_nodes)]
+                prev_node = self.__poisson_generators_from_nodes[i - len(self.__extreme_nodes + self.__tls_ids)]
                 args = (start_node, prev_node, self.__INF, self.__nodes, self.__graph, self.__edges_length)
             args_list.append(args)
         self.__network_logger.init_progress_bar(Message.init_restore_path_matrix, len(start_nodes))
@@ -335,32 +342,105 @@ class Net:
             path.append(edge)
         return path[::-1]
 
+    def __get_distance_matrix(self, tls_ids) -> np.ndarray:
+        n = len(tls_ids)
+        distances = np.zeros(shape=(n, n), dtype=np.int32)
+        for i, tls_i in enumerate(tls_ids):
+            for j, tls_j in enumerate(tls_ids):
+                if i != j:
+                    distances[i][j] = self.get_path_length_in_edges(self.__paths[(tls_i, None)][tls_j])
+        return distances
+
+    @staticmethod
+    def __any_overkill_groups(groups_dict):
+        for label, group in groups_dict.items():
+            if len(group) > 4:
+                return label
+        return -1
+
+    @staticmethod
+    def __find_max_dist_i(group, distances, medoids, label):
+        max_dist = float('-inf')
+        max_dist_i = 0
+        for i in group:
+            if distances[i, medoids[label]] > max_dist:
+                max_dist = distances[i, medoids[label]]
+                max_dist_i = i
+        return max_dist_i
+
+    @staticmethod
+    def __find_best_shortage_group(groups_dict, max_dist_i, distances, medoids):
+        best_label = list(groups_dict.keys())[-1]
+        min_dist = float('inf')
+        for label, group in list(reversed(groups_dict.items())):
+            if len(group) >= 4:
+                break
+            if distances[max_dist_i, medoids[label]] < min_dist:
+                min_dist = distances[max_dist_i, medoids[label]]
+                best_label = label
+        return best_label
+
+    def __recursive_clustering(self, tls_ids):
+        distances = self.__get_distance_matrix(tls_ids)
+        n = len(tls_ids)
+        groups_dict = {}
+        prev_groups_dict = {}
+        for n_clusters in range(1, n):
+            medoids_model = km.fasterpam(diss=distances, medoids=n_clusters, random_state=42, max_iter=1000)
+            labels = medoids_model.labels
+            groups_dict = {i: [] for i in range(n_clusters)}
+            for i, label in enumerate(labels):
+                groups_dict[label].append(i)
+            shortage_in_group = False
+            for label, labeled_tls in groups_dict.items():
+                if len(labeled_tls) < 4:
+                    shortage_in_group = True
+                    break
+            if shortage_in_group:
+                break
+            prev_groups_dict = groups_dict
+        medoids = medoids_model.medoids
+        groups_dict = dict(sorted(groups_dict.items(), key=lambda item: len(item[1]), reverse=True))
+        groups_list = []
+        if self.__any_overkill_groups(groups_dict) == -1:
+            for label, group in prev_groups_dict.items():
+                group_tls_ids = [tls_ids[i] for i in group]
+                groups_list.append(group_tls_ids)
+        else:
+            while self.__any_overkill_groups(groups_dict) != -1:
+                overkill_label = self.__any_overkill_groups(groups_dict)
+                overkill_group = groups_dict[overkill_label]
+                max_dist_i = self.__find_max_dist_i(overkill_group, distances, medoids, overkill_label)
+                best_label = self.__find_best_shortage_group(groups_dict, max_dist_i, distances, medoids)
+                if len(groups_dict[best_label]) >= 4:
+                    break
+                groups_dict[overkill_label].remove(max_dist_i)
+                groups_dict[best_label].append(max_dist_i)
+                groups_dict = dict(sorted(groups_dict.items(), key=lambda item: len(item[1]), reverse=True))
+            for label, group in groups_dict.items():
+                group_tls_ids = [tls_ids[i] for i in group]
+                if len(group) >= 8:
+                    divided_group = self.__recursive_clustering(group_tls_ids)
+                    groups_list.extend(divided_group)
+                else:
+                    groups_list.append(group_tls_ids)
+        return groups_list
+
     def make_traffic_lights_groups(self):
-        start_node = self.__nodes[0]
-        visited_nodes, current_group = set(), []
-        remain_tls = set(self.__turned_on_traffic_lights_ids)
-        visited_nodes.add(start_node)
-        if start_node in self.__turned_on_traffic_lights_ids:
-            current_group.append(start_node)
-        queue = deque([start_node])
-        while queue:
-            node = queue.popleft()
-            neighbors = list(self.__graph[node].items())
-            for neighbor_node, edge in neighbors:
-                if neighbor_node not in visited_nodes:
-                    visited_nodes.add(neighbor_node)
-                    queue.append(neighbor_node)
-                    if neighbor_node in self.__turned_on_traffic_lights_ids:
-                        current_group.append(neighbor_node)
-                    if len(current_group) == 4:
-                        remain_tls.difference_update(current_group)
-                        self.__traffic_lights_groups.append(current_group)
-                        current_group = []
-        if len(remain_tls) > 0:
-            print(
-                f"These traffic lights are not included in any of the groups: {remain_tls}. "
-                f"\nThey will not learn, they will use the default settings")
-        self.__remain_tls = list(remain_tls)
+        groups = self.__recursive_clustering(self.__turned_on_traffic_lights_ids)
+        filtered_groups = []
+        for group in groups:
+            if len(group) > 4:
+                index_by_id = {tls_id: idx for idx, tls_id in enumerate(group)}
+                distances = self.__get_distance_matrix(group)
+                medoids_model = km.fasterpam(diss=distances, medoids=1, random_state=42, max_iter=1)
+                medoid = medoids_model.medoids[0]
+                sorted_group = sorted(group, key=lambda tls_id: distances[index_by_id[tls_id], medoid], reverse=True)
+                self.__remain_tls.extend(sorted_group[:len(sorted_group) - 4])
+                filtered_groups.append(sorted_group[len(sorted_group) - 4:])
+            else:
+                filtered_groups.append(group)
+        self.__traffic_lights_groups = filtered_groups
 
     def get_restore_path_matrix(self) -> dict[str, dict[str, str | None]]:
         return self.__restore_path_matrix

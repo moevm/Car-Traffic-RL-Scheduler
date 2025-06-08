@@ -146,8 +146,8 @@ class TrafficLightsDynamicEnv(gym.Env):
                                 len(phases) - n_yellow_states[tls_id])
                 phase.minDur = phase.duration
                 phase.maxDur = phase.duration
-            traci.trafficlight.setCompleteRedYellowGreenDefinition(tls_id, logic)
-
+            traci.trafficlight.setProgramLogic(tls_id, logic)
+            print(traci.trafficlight.getAllProgramLogics(tls_id)[0])
     def reset(
             self,
             *,
