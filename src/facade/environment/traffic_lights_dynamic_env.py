@@ -86,9 +86,20 @@ class TrafficLightsDynamicEnv(gym.Env):
             "time": Box(low=0, high=self.__critical_duration, shape=(self.__group_size,), dtype=np.float32),
             "bounds": MultiDiscrete([3] * self.__group_size),
             "accumulated_capacity": Box(low=0, high=10 * self.__critical_duration, shape=(self.__group_size,),
-                                        dtype=np.float32)
+                                        dtype=np.float32),
+            "mean_distance": Box(low=0, high=20, shape=(self.__group_size, self.__n_lanes), dtype=np.float32)
         })
         return observation_space
+
+    @staticmethod
+    def __get_mean_distance_from_tls(tls_id: str, lane_id: str):
+        vehicles_ids = traci.lane.getLastStepVehicleIDs(lane_id)
+        total_distance = 0
+        for vehicle_id in vehicles_ids:
+            x_tls, y_tls = traci.junction.getPosition(junctionID=tls_id)
+            x_vehicle, y_vehicle = traci.vehicle.getPosition(vehicle_id)
+            total_distance += np.sqrt((x_tls - x_vehicle) ** 2 + (y_tls - y_vehicle) ** 2) / traci.lane.getLength(lane_id)
+        return total_distance / max(len(vehicles_ids), 1)
 
     def __get_observation(self, i_window):
         tls_group = self.__traffic_lights_groups[i_window]
@@ -98,12 +109,14 @@ class TrafficLightsDynamicEnv(gym.Env):
         time = np.zeros(shape=(self.__group_size,), dtype=np.int32)
         bounds = np.zeros(shape=(self.__group_size,), dtype=np.int8)
         accumulated_capacity = np.zeros(shape=(self.__group_size,), dtype=np.float32)
+        mean_distance = np.zeros(shape=(self.__group_size, self.__n_lanes), dtype=np.float32)
         for i, tls_id in enumerate(tls_group):
             lanes = list(dict.fromkeys(traci.trafficlight.getControlledLanes(tls_id)))
-            for j, lane in enumerate(lanes):
-                waiting[i, j] = traci.lane.getLastStepHaltingNumber(lane) / (
-                        traci.lane.getLength(lane) / self.__vehicle_size)
-                density[i, j] = traci.lane.getLastStepOccupancy(lane)
+            for j, lane_id in enumerate(lanes):
+                waiting[i, j] = traci.lane.getLastStepHaltingNumber(lane_id) / (
+                        traci.lane.getLength(lane_id) / self.__vehicle_size)
+                density[i, j] = traci.lane.getLastStepOccupancy(lane_id)
+                mean_distance[i, j] = self.__get_mean_distance_from_tls(tls_id, lane_id)
             phase[i] = traci.trafficlight.getPhase(tls_id)
             time[i] = min(traci.trafficlight.getSpentDuration(tls_id), self.__critical_duration)
             accumulated_capacity[i] = self.__n_steps_capacity[tls_id]
@@ -119,13 +132,10 @@ class TrafficLightsDynamicEnv(gym.Env):
             "phase": phase,
             "time": time,
             "bounds": bounds,
-            "accumulated_capacity": accumulated_capacity
+            "accumulated_capacity": accumulated_capacity,
+            "mean_distance": mean_distance
         }
         return observation
-
-    @staticmethod
-    def _normalize_reward(x: float, x_min: float, x_max: float, a: float, b: float) -> float:
-        return a + (x - x_min) * (b - a) / (x_max - x_min)
 
     def __assign_cycle_time_for_remain_tls(self):
         sum_yellow_duration = {tls_id: 0 for tls_id in self.__remain_tls}
@@ -143,7 +153,7 @@ class TrafficLightsDynamicEnv(gym.Env):
             for phase in phases:
                 if 'y' not in phase.state:
                     phase.duration = (self.__cycle_time - sum_yellow_duration[tls_id]) // (
-                                len(phases) - n_yellow_states[tls_id])
+                            len(phases) - n_yellow_states[tls_id])
                 phase.minDur = phase.duration
                 phase.maxDur = phase.duration
             traci.trafficlight.setCompleteRedYellowGreenDefinition(tls_id, logic)
@@ -271,8 +281,10 @@ class TrafficLightsDynamicEnv(gym.Env):
                         if (vehicle_before not in vehicles_on_lanes_after[j]) and (
                                 vehicle_before not in traci.simulation.getArrivedIDList()):
                             reward += 1
+                self.__n_steps_capacity[tls_id] += reward
+            elif ('y' in state) and (not switched_tls[i]):
+                self.__n_steps_capacity[tls_id] = 0
             sum_step_capacity += reward
-            self.__n_steps_capacity[tls_id] += reward
         return sum_step_capacity
 
     def __update_vehicles_on_lanes_before(self) -> None:
