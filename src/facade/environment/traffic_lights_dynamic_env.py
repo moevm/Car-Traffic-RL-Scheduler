@@ -98,7 +98,8 @@ class TrafficLightsDynamicEnv(gym.Env):
         for vehicle_id in vehicles_ids:
             x_tls, y_tls = traci.junction.getPosition(junctionID=tls_id)
             x_vehicle, y_vehicle = traci.vehicle.getPosition(vehicle_id)
-            total_distance += np.sqrt((x_tls - x_vehicle) ** 2 + (y_tls - y_vehicle) ** 2) / traci.lane.getLength(lane_id)
+            distance = np.sqrt((x_tls - x_vehicle) ** 2 + (y_tls - y_vehicle) ** 2)
+            total_distance += distance / traci.lane.getLength(lane_id)
         return total_distance / max(len(vehicles_ids), 1)
 
     def __get_observation(self, i_window):
