@@ -87,7 +87,7 @@ class TrafficLightsDynamicEnv(gym.Env):
             "bounds": MultiDiscrete([3] * self.__group_size),
             "accumulated_capacity": Box(low=0, high=10 * self.__critical_duration, shape=(self.__group_size,),
                                         dtype=np.float32),
-            "mean_distance": Box(low=0, high=20, shape=(self.__group_size, self.__n_lanes), dtype=np.float32)
+            "mean_distance": Box(low=0, high=300, shape=(self.__group_size, self.__n_lanes), dtype=np.float32)
         })
         return observation_space
 
@@ -100,7 +100,10 @@ class TrafficLightsDynamicEnv(gym.Env):
             x_vehicle, y_vehicle = traci.vehicle.getPosition(vehicle_id)
             distance = np.sqrt((x_tls - x_vehicle) ** 2 + (y_tls - y_vehicle) ** 2)
             total_distance += distance / traci.lane.getLength(lane_id)
-        return total_distance / max(len(vehicles_ids), 1)
+        if len(vehicles_ids) > 0:
+            return total_distance / len(vehicles_ids)
+        else:
+            return 300
 
     def __get_observation(self, i_window):
         tls_group = self.__traffic_lights_groups[i_window]
@@ -158,7 +161,7 @@ class TrafficLightsDynamicEnv(gym.Env):
                 phase.minDur = phase.duration
                 phase.maxDur = phase.duration
             traci.trafficlight.setProgramLogic(tls_id, logic)
-            print(traci.trafficlight.getAllProgramLogics(tls_id)[0])
+
     def reset(
             self,
             *,
