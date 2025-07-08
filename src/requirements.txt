@@ -14,3 +14,4 @@ rich==14.0.0
 tqdm==4.67.1
 tensorboard==2.19.0
 tensorboard-data-server==0.7.2
+kmedoids==0.5.3.1
