@@ -103,7 +103,7 @@ class TrafficLightsDynamicEnv(gym.Env):
         if len(vehicles_ids) > 0:
             return total_distance / len(vehicles_ids)
         else:
-            return 300
+            return 0
 
     def __get_observation(self, i_window):
         tls_group = self.__traffic_lights_groups[i_window]
