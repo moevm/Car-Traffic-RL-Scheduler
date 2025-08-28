@@ -13,7 +13,6 @@ from facade.net import Net
 from facade.structures import SimulationParams
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize, DummyVecEnv
 from stable_baselines3.common.utils import get_linear_fn
-from stable_baselines3 import PPO
 import pandas as pd
 
 
@@ -191,10 +190,10 @@ class TrafficScheduler:
             model = RecurrentPPO(policy='MultiInputLstmPolicy',
                                  env=vec_env,
                                  tensorboard_log='./metrics_logs',
-                                 learning_rate=get_linear_fn(start=5e-05, end=5e-07, end_fraction=0.75),
+                                 learning_rate=get_linear_fn(start=5e-05, end=0, end_fraction=1.0),
                                  n_steps=n_steps,
                                  batch_size=n_steps,
-                                 max_grad_norm=7.3,
+                                 max_grad_norm=5.0,
                                  normalize_advantage=True,
                                  gae_lambda=0.95,
                                  ent_coef=0.005,

@@ -191,11 +191,23 @@ class TrafficLightsDynamicEnv(gym.Env):
         }
         return observation, group_rewards
 
+    def __calculate_waiting_reward(self, switched_tls: list[bool], i_window: int) -> float:
+        tls_group = self.__traffic_lights_groups[i_window]
+        sum_waiting_reward = 0.0
+        for i, tls_id in enumerate(tls_group):
+            current_logic = traci.trafficlight.getAllProgramLogics(tls_id)[0]
+            current_phase = traci.trafficlight.getPhase(tls_id)
+            state = current_logic.phases[current_phase].state
+            lanes = set(traci.trafficlight.getControlledLanes(tls_id))
+            if ('y' not in state) or (('y' in state) and switched_tls[i]):
+                for j, lane in enumerate(lanes):
+                    sum_waiting_reward += traci.lane.getWaitingTime(lane)
+        return -sum_waiting_reward
+
     def __calculate_halting_reward(self, switched_tls: list[bool], i_window: int) -> float:
         tls_group = self.__traffic_lights_groups[i_window]
         sum_halting_number = 0.0
         for i, tls_id in enumerate(tls_group):
-            tls_id = tls_group[i]
             current_logic = traci.trafficlight.getAllProgramLogics(tls_id)[0]
             current_phase = traci.trafficlight.getPhase(tls_id)
             state = current_logic.phases[current_phase].state
@@ -315,11 +327,11 @@ class TrafficLightsDynamicEnv(gym.Env):
         tls_reward, switched_tls, spent_duration_tls = self.__change_phase(action, self.__i_window)
         vehicles_on_tls_after = self.__get_vehicles_on_lanes(self.__i_window)
         step_capacity = self.__calculate_step_capacity(vehicles_on_tls_after, switched_tls, self.__i_window)
-        halting_reward = self.__calculate_halting_reward(switched_tls, self.__i_window)
+        waiting_reward = self.__calculate_waiting_reward(switched_tls, self.__i_window)
         group_rewards = {
             "step_capacity": step_capacity,
             "tls_reward": tls_reward,
-            "halting_reward": halting_reward
+            "halting_reward": waiting_reward
         }
         group_rewards["sum_reward"] = sum(group_rewards.values())
         reward = sum(group_rewards.values())
