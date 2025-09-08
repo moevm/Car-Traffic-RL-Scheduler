@@ -14,17 +14,15 @@ class TensorboardCallback(BaseCallback):
             "normalized_sum_reward": np.zeros(shape=(self.training_env.num_envs,), dtype=np.float32),
             "sum_reward": np.zeros(shape=(self.training_env.num_envs,), dtype=np.float32),
             "step_capacity": np.zeros(shape=(self.training_env.num_envs,), dtype=np.float32),
-            "tls_reward": np.zeros(shape=(self.training_env.num_envs,), dtype=np.float32),
-            "halting_reward": np.zeros(shape=(self.training_env.num_envs,), dtype=np.float32),
+            "waiting_reward": np.zeros(shape=(self.training_env.num_envs,), dtype=np.float32),
         }
 
     def __update_statistics_from_info(self, info, i):
-        ignored_args = ['TimeLimit.truncated', 'terminal_observation']
-        for reward_type in info:
-            if reward_type not in ignored_args:
-                reward = self.__rollout_rewards[reward_type][i]
-                self.__rollout_rewards[reward_type][i] = (reward + (1 / (self.locals["n_steps"] + 1)) *
-                                                          (info[reward_type] - reward))
+        rewards = info["rewards"]
+        for reward_type in rewards:
+            reward = self.__rollout_rewards[reward_type][i]
+            self.__rollout_rewards[reward_type][i] = (reward + (1 / (self.locals["n_steps"] + 1)) *
+                                                      (rewards[reward_type] - reward))
 
     def _on_step(self) -> bool:
         infos = self.locals["infos"]

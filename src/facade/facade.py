@@ -4,6 +4,9 @@ import numpy as np
 import traci
 import os
 from sb3_contrib import RecurrentPPO
+
+from facade.learning_algorithm.policy import MaskableRecurrentActorCriticPolicy
+from facade.learning_algorithm.maskable_recurrent_ppo import MaskableRecurrentPPO
 from facade.environment.tensorboard_callback import TensorboardCallback
 from facade.environment.traffic_lights_dynamic_env import TrafficLightsDynamicEnv
 from facade.generation.route_generator import RouteGenerator
@@ -187,16 +190,16 @@ class TrafficScheduler:
                                    norm_obs_keys=["density", "waiting", "time"])
             os.makedirs('metrics_logs', exist_ok=True)
             os.makedirs('pretrained_info', exist_ok=True)
-            model = RecurrentPPO(policy='MultiInputLstmPolicy',
+            model = MaskableRecurrentPPO(policy=MaskableRecurrentActorCriticPolicy,
                                  env=vec_env,
                                  tensorboard_log='./metrics_logs',
                                  learning_rate=get_linear_fn(start=5e-05, end=0, end_fraction=1.0),
                                  n_steps=n_steps,
                                  batch_size=n_steps,
-                                 max_grad_norm=5.0,
+                                 max_grad_norm=2.0,
                                  normalize_advantage=True,
                                  gae_lambda=0.95,
-                                 ent_coef=0.005,
+                                 ent_coef=0.01,
                                  vf_coef=0.5,
                                  device='cuda')
             model.learn(total_timesteps=self.__simulation_params.DURATION,

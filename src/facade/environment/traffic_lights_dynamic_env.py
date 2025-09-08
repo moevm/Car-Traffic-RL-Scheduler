@@ -54,7 +54,6 @@ class TrafficLightsDynamicEnv(gym.Env):
         self.__min_duration = 15
         self.__max_duration = 60
         self.__max_tls_neighbors = 4
-        self.__critical_duration = 90
         self.__max_phases = 6
         self.__i_window = 0
         observation_space = self.__make_observation_space()
@@ -83,9 +82,9 @@ class TrafficLightsDynamicEnv(gym.Env):
             "density": Box(low=0, high=100, shape=(self.__group_size, self.__n_lanes), dtype=np.float32),
             "waiting": Box(low=0, high=1, shape=(self.__group_size, self.__n_lanes), dtype=np.float32),
             "phase": MultiDiscrete([self.__max_phases] * self.__group_size),
-            "time": Box(low=0, high=self.__critical_duration, shape=(self.__group_size,), dtype=np.float32),
+            "time": Box(low=0, high=self.__max_duration, shape=(self.__group_size,), dtype=np.float32),
             "bounds": MultiDiscrete([3] * self.__group_size),
-            "accumulated_capacity": Box(low=0, high=10 * self.__critical_duration, shape=(self.__group_size,),
+            "accumulated_capacity": Box(low=0, high=10 * self.__max_duration, shape=(self.__group_size,),
                                         dtype=np.float32),
             "mean_distance": Box(low=0, high=300, shape=(self.__group_size, self.__n_lanes), dtype=np.float32)
         })
@@ -122,7 +121,7 @@ class TrafficLightsDynamicEnv(gym.Env):
                 density[i, j] = traci.lane.getLastStepOccupancy(lane_id)
                 mean_distance[i, j] = self.__get_mean_distance_from_tls(tls_id, lane_id)
             phase[i] = traci.trafficlight.getPhase(tls_id)
-            time[i] = min(traci.trafficlight.getSpentDuration(tls_id), self.__critical_duration)
+            time[i] = min(traci.trafficlight.getSpentDuration(tls_id), self.__max_duration)
             accumulated_capacity[i] = self.__n_steps_capacity[tls_id]
             if traci.trafficlight.getSpentDuration(tls_id) < self.__min_duration:
                 bounds[i] = 0
@@ -177,19 +176,22 @@ class TrafficLightsDynamicEnv(gym.Env):
             n_phases = len(current_logic.phases)
             current_phase = traci.trafficlight.getPhase(tls_id)
             traci.trafficlight.setPhase(tls_id, (current_phase + 1) % n_phases)
-        self.__global_step = self.__start_global_step + 1
+        self.__global_step = self.__start_global_step + 2
         self.__schedule = self.__transport_generator.generate_schedule_for_poisson_flow(self.__global_step + 1,
                                                                                         self.__truncated_time)
         self.__update_vehicles_on_lanes_before()
+        traci.simulationStep()
         self.__i_window, self.__local_step = 0, 0
         observation = self.__get_observation(self.__i_window)
-        group_rewards = {
-            "sum_reward": 0.0,
-            "step_capacity": 0.0,
-            "tls_reward": 0.0,
-            "halting_reward": 0.0
+        info = {
+            "rewards": {
+                "sum_reward": 0.0,
+                "step_capacity": 0.0,
+                "waiting_reward": 0.0,
+            },
+            "action_mask": np.array([0] * self.__group_size, dtype=np.uint8)
         }
-        return observation, group_rewards
+        return observation, info
 
     def __calculate_waiting_reward(self, switched_tls: list[bool], i_window: int) -> float:
         tls_group = self.__traffic_lights_groups[i_window]
@@ -218,18 +220,16 @@ class TrafficLightsDynamicEnv(gym.Env):
                             traci.lane.getLength(lane) / self.__vehicle_size)
         return -sum_halting_number
 
-    def __change_phase(self, action: ActType, i_window: int) -> tuple[float, list[bool], list[float]]:
+    def __change_phase(self, action: ActType, i_window: int) -> list[bool]:
         tls_group = self.__traffic_lights_groups[i_window]
         switched_tls = [False] * len(tls_group)
-        spent_duration_tls = []
-        sum_reward = 0
+        durations = []
         for i, tls_id in enumerate(tls_group):
-            reward = 0
+            durations.append(traci.trafficlight.getSpentDuration(tls_id))
             current_logic = traci.trafficlight.getAllProgramLogics(tls_id)[0]
             n_phases = len(current_logic.phases)
             current_phase = traci.trafficlight.getPhase(tls_id)
             state = current_logic.phases[current_phase].state
-            spent_duration_tls.append(traci.trafficlight.getSpentDuration(tls_id))
             spent = traci.trafficlight.getSpentDuration(tls_id)
             if 'y' not in state:
                 if self.__train_mode:
@@ -238,7 +238,6 @@ class TrafficLightsDynamicEnv(gym.Env):
                         switched_tls[i] = True
                     elif action[i] == 0:
                         traci.trafficlight.setPhase(tls_id, current_phase)
-                    reward = self.__get_context_reward(max(spent, 1), action[i], -10)
                 else:
                     if action[i] == 1:
                         print(f"duration {spent} | tls_id {tls_id}")
@@ -252,9 +251,7 @@ class TrafficLightsDynamicEnv(gym.Env):
                             traci.trafficlight.setPhase(tls_id, (current_phase + 1) % n_phases)
                         else:
                             traci.trafficlight.setPhase(tls_id, current_phase)
-                    reward = self.__get_context_reward(max(spent, 1), action[i], -10)
-            sum_reward += reward
-        return sum_reward, switched_tls, spent_duration_tls
+        return switched_tls
 
     def __get_vehicles_on_lanes(self, i_window: int) -> list[list[list[str]]]:
         tls_group = self.__traffic_lights_groups[i_window]
@@ -266,15 +263,6 @@ class TrafficLightsDynamicEnv(gym.Env):
                 tls_lanes.append(traci.lane.getLastStepVehicleIDs(lane))
             vehicles_on_lanes.append(tls_lanes)
         return vehicles_on_lanes
-
-    def __get_context_reward(self, spent: float, action: int, min_reward: float):
-        if action == 1 and spent < self.__min_duration:
-            context_reward = min_reward * (1 - spent / self.__min_duration)
-        elif action == 0 and spent > self.__max_duration:
-            context_reward = min_reward * spent / self.__max_duration
-        else:
-            context_reward = 0
-        return context_reward
 
     def __calculate_step_capacity(self,
                                   vehicles_on_tls_after: list[list[list[str]]],
@@ -321,20 +309,23 @@ class TrafficLightsDynamicEnv(gym.Env):
             last_target_nodes_data = self.__route_generator.get_last_target_nodes_data()
             self.__transport_generator.generate_transport(last_target_nodes_data)
 
+    def get_action_mask(self, i_window: int) -> np.ndarray:
+        action_mask = np.array([0] * self.__group_size, dtype=np.uint8)
+        tls_group = self.__traffic_lights_groups[i_window]
+        for i, tls_id in enumerate(tls_group):
+            if self.__min_duration <= traci.trafficlight.getSpentDuration(tls_id) <= self.__max_duration:
+                action_mask[i] = 1
+            elif traci.trafficlight.getSpentDuration(tls_id) > self.__max_duration:
+                action_mask[i] = 2
+        return action_mask
+
     def step(
             self, action: ActType
     ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
-        tls_reward, switched_tls, spent_duration_tls = self.__change_phase(action, self.__i_window)
+        switched_tls = self.__change_phase(action, self.__i_window)
         vehicles_on_tls_after = self.__get_vehicles_on_lanes(self.__i_window)
         step_capacity = self.__calculate_step_capacity(vehicles_on_tls_after, switched_tls, self.__i_window)
         waiting_reward = self.__calculate_waiting_reward(switched_tls, self.__i_window)
-        group_rewards = {
-            "step_capacity": step_capacity,
-            "tls_reward": tls_reward,
-            "halting_reward": waiting_reward
-        }
-        group_rewards["sum_reward"] = sum(group_rewards.values())
-        reward = sum(group_rewards.values())
         truncated = (self.__local_step == self.__truncated_time) and (
                 self.__i_window == len(self.__traffic_lights_groups) - 1)
         terminated = False
@@ -342,7 +333,16 @@ class TrafficLightsDynamicEnv(gym.Env):
             self.__next_timestep()
         self.__i_window = (self.__i_window + 1) % len(self.__traffic_lights_groups)
         observation = self.__get_observation(self.__i_window)
-        return observation, reward, terminated, truncated, group_rewards
+        info = {
+            "rewards": {
+                "step_capacity": step_capacity,
+                "waiting_reward": waiting_reward,
+                "sum_reward": step_capacity + waiting_reward
+            },
+            "action_mask": self.get_action_mask(self.__i_window)
+        }
+        reward = info["rewards"]["sum_reward"]
+        return observation, reward, terminated, truncated, info
 
     def __collect_statistics(self):
         halting_number = 0
