@@ -1,6 +1,7 @@
 import time
 from collections import deque
 from copy import deepcopy
+from typing import Union, Optional
 
 from sb3_contrib.common.recurrent.policies import RecurrentActorCriticPolicy
 from sb3_contrib.common.recurrent.type_aliases import RNNStates
@@ -384,3 +385,14 @@ class MaskableRecurrentPPO(RecurrentPPO):
         self.logger.record("train/clip_range", clip_range)
         if self.clip_range_vf is not None:
             self.logger.record("train/clip_range_vf", clip_range_vf)
+
+    def predict_maskable(
+        self,
+        observation: Union[np.ndarray, dict[str, np.ndarray]],
+        action_mask: np.ndarray,
+        state: Optional[tuple[np.ndarray, ...]] = None,
+        episode_start: Optional[np.ndarray] = None,
+        deterministic: bool = False
+    ) -> tuple[np.ndarray, Optional[tuple[np.ndarray, ...]]]:
+        action_mask_tensor = th.as_tensor(action_mask, device=self.device, dtype=th.float64)
+        return self.policy.predict_maskable(observation, action_mask_tensor, state, episode_start, deterministic)

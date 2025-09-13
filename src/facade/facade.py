@@ -4,6 +4,7 @@ import numpy as np
 import traci
 import os
 from sb3_contrib import RecurrentPPO
+from triton.language import dtype
 
 from facade.learning_algorithm.policy import MaskableRecurrentActorCriticPolicy
 from facade.learning_algorithm.maskable_recurrent_ppo import MaskableRecurrentPPO
@@ -232,21 +233,24 @@ class TrafficScheduler:
             vec_env.training = False
             vec_env.norm_reward = False
 
-            model = RecurrentPPO.load(model_weights, env=vec_env, device='cpu')
+            model = MaskableRecurrentPPO.load(model_weights, env=vec_env, device='cpu')
             model_env = model.get_env()
             obs = model_env.reset()
             lstm_states = None
             episode_starts = np.ones((model_env.num_envs,), dtype=np.float32)
-
+            action_mask = np.zeros((model_env.num_envs, len(self.__traffic_lights_groups[0])), dtype=np.float32)
             while True:
-                action, lstm_states = model.predict(
+                action, lstm_states = model.predict_maskable(
                     obs,
+                    action_mask,
                     state=lstm_states,
                     deterministic=True,
                     episode_start=episode_starts
                 )
                 obs, rewards, dones, infos = model_env.step(action)
                 episode_starts = dones.astype(np.float32)
+                for i, info in enumerate(infos):
+                    action_mask[i] = info["action_mask"]
                 if np.all(dones):
                     break
             agent_statistics = vec_env.venv.envs[0].unwrapped.get_statistics()
