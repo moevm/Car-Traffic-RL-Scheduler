@@ -1,4 +1,5 @@
 import json
+from typing import Callable
 
 import numpy as np
 import traci
@@ -169,6 +170,12 @@ class TrafficScheduler:
             traci.simulation.saveState(self.__CHECKPOINT_CONFIG)
         traci.close()
 
+    @staticmethod
+    def __exp_schedule(initial_value: float) -> Callable[[float], float]:
+        def func(progress_remaining: float) -> float:
+            return initial_value * np.exp(-7 * (1 - progress_remaining))
+        return func
+
     def learn(self):
         self.__setup_start_simulation_state()
         if not self.__new_checkpoint:
@@ -192,17 +199,17 @@ class TrafficScheduler:
             os.makedirs('metrics_logs', exist_ok=True)
             os.makedirs('pretrained_info', exist_ok=True)
             model = MaskableRecurrentPPO(policy=MaskableRecurrentActorCriticPolicy,
-                                 env=vec_env,
-                                 tensorboard_log='./metrics_logs',
-                                 learning_rate=get_linear_fn(start=5e-05, end=0, end_fraction=1.0),
-                                 n_steps=n_steps,
-                                 batch_size=n_steps,
-                                 max_grad_norm=2.0,
-                                 normalize_advantage=True,
-                                 gae_lambda=0.95,
-                                 ent_coef=0.01,
-                                 vf_coef=0.5,
-                                 device='cuda')
+                                         env=vec_env,
+                                         tensorboard_log='./metrics_logs',
+                                         learning_rate=self.__exp_schedule(0.001),
+                                         n_steps=n_steps,
+                                         batch_size=n_steps,
+                                         max_grad_norm=2.0,
+                                         normalize_advantage=True,
+                                         gae_lambda=0.95,
+                                         ent_coef=0.01,
+                                         vf_coef=0.5,
+                                         device='cuda')
             model.learn(total_timesteps=self.__simulation_params.DURATION,
                         progress_bar=True,
                         callback=TensorboardCallback(len(self.__traffic_lights_groups[0])),

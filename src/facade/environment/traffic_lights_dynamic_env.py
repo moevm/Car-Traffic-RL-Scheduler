@@ -86,23 +86,37 @@ class TrafficLightsDynamicEnv(gym.Env):
             "bounds": MultiDiscrete([3] * self.__group_size),
             "accumulated_capacity": Box(low=0, high=10 * self.__max_duration, shape=(self.__group_size,),
                                         dtype=np.float32),
-            "mean_distance": Box(low=0, high=300, shape=(self.__group_size, self.__n_lanes), dtype=np.float32)
+            "mean_distance": Box(low=0, high=300, shape=(self.__group_size, self.__n_lanes), dtype=np.float32),
+            "std_distance": Box(low=0, high=300, shape=(self.__group_size, self.__n_lanes), dtype=np.float32),
+            "mean_speed": Box(low=0, high=200, shape=(self.__group_size, self.__n_lanes), dtype=np.float32),
+            "std_speed": Box(low=0, high=200, shape=(self.__group_size, self.__n_lanes), dtype=np.float32)
         })
         return observation_space
 
     @staticmethod
-    def __get_mean_distance_from_tls(tls_id: str, lane_id: str):
+    def __get_distance_stats_on_lane(tls_id: str, lane_id: str) -> tuple[np.float32, np.float32]:
         vehicles_ids = traci.lane.getLastStepVehicleIDs(lane_id)
-        total_distance = 0
-        for vehicle_id in vehicles_ids:
+        distances = np.zeros((len(vehicles_ids, )), dtype=np.float32)
+        for i, vehicle_id in enumerate(vehicles_ids):
             x_tls, y_tls = traci.junction.getPosition(junctionID=tls_id)
             x_vehicle, y_vehicle = traci.vehicle.getPosition(vehicle_id)
             distance = np.sqrt((x_tls - x_vehicle) ** 2 + (y_tls - y_vehicle) ** 2)
-            total_distance += distance / traci.lane.getLength(lane_id)
+            distances[i] = distance / traci.lane.getLength(lane_id)
         if len(vehicles_ids) > 0:
-            return total_distance / len(vehicles_ids)
+            return distances.mean(), distances.std()
         else:
-            return 0
+            return np.float32(0), np.float32(0)
+
+    @staticmethod
+    def __get_speed_stats_on_lane(lane_id: str):
+        vehicles_ids = traci.lane.getLastStepVehicleIDs(lane_id)
+        speeds = np.zeros((len(vehicles_ids, )), dtype=np.float32)
+        for i, vehicle_id in enumerate(vehicles_ids):
+            speeds[i] = traci.vehicle.getSpeed(vehicle_id)
+        if len(vehicles_ids) > 0:
+            return speeds.mean(), speeds.std()
+        else:
+            return np.float32(0), np.float32(0)
 
     def __get_observation(self, i_window):
         tls_group = self.__traffic_lights_groups[i_window]
@@ -113,13 +127,17 @@ class TrafficLightsDynamicEnv(gym.Env):
         bounds = np.zeros(shape=(self.__group_size,), dtype=np.int8)
         accumulated_capacity = np.zeros(shape=(self.__group_size,), dtype=np.float32)
         mean_distance = np.zeros(shape=(self.__group_size, self.__n_lanes), dtype=np.float32)
+        std_distance = np.zeros(shape=(self.__group_size, self.__n_lanes), dtype=np.float32)
+        mean_speed = np.zeros(shape=(self.__group_size, self.__n_lanes), dtype=np.float32)
+        std_speed = np.zeros(shape=(self.__group_size, self.__n_lanes), dtype=np.float32)
         for i, tls_id in enumerate(tls_group):
             lanes = list(dict.fromkeys(traci.trafficlight.getControlledLanes(tls_id)))
             for j, lane_id in enumerate(lanes):
                 waiting[i, j] = traci.lane.getLastStepHaltingNumber(lane_id) / (
                         traci.lane.getLength(lane_id) / self.__vehicle_size)
                 density[i, j] = traci.lane.getLastStepOccupancy(lane_id)
-                mean_distance[i, j] = self.__get_mean_distance_from_tls(tls_id, lane_id)
+                mean_distance[i, j], std_distance[i, j] = self.__get_distance_stats_on_lane(tls_id, lane_id)
+                mean_speed[i, j], std_speed[i, j] = self.__get_speed_stats_on_lane(lane_id)
             phase[i] = traci.trafficlight.getPhase(tls_id)
             time[i] = min(traci.trafficlight.getSpentDuration(tls_id), self.__max_duration)
             accumulated_capacity[i] = self.__n_steps_capacity[tls_id]
@@ -136,7 +154,10 @@ class TrafficLightsDynamicEnv(gym.Env):
             "time": time,
             "bounds": bounds,
             "accumulated_capacity": accumulated_capacity,
-            "mean_distance": mean_distance
+            "mean_distance": mean_distance,
+            "std_distance": std_distance,
+            "mean_speed": mean_speed,
+            "std_speed": std_speed
         }
         return observation
 
