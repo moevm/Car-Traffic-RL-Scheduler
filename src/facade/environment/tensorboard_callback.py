@@ -17,7 +17,7 @@ class TensorboardCallback(BaseCallback):
             "waiting_reward": np.zeros(shape=(self.training_env.num_envs,), dtype=np.float32),
         }
 
-    def __update_statistics_from_info(self, info, i):
+    def __update_statistics_from_info(self, info: dict, i: int):
         rewards = info["rewards"]
         for reward_type in rewards:
             reward = self.__rollout_rewards[reward_type][i]

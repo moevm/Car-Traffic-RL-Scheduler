@@ -107,7 +107,7 @@ class Net:
         self.__network_logger.init_progress_bar(Message.find_all_routes, len(to_nodes))
         with Pool(cpu_count() * self.__CPU_SCALE) as p:
             for args in args_list:
-                p.apply_async(Net._find_routes, args, callback=self.__callback_find_routes, error_callback=Net._error_3)
+                p.apply_async(Net._find_routes, args, callback=self.__callback_find_routes)
             p.close()
             p.join()
         self.__network_logger.destroy_progress_bar()
@@ -143,8 +143,7 @@ class Net:
         self.__network_logger.init_progress_bar(Message.init_restore_path_matrix, len(start_nodes))
         with Pool(cpu_count() * self.__CPU_SCALE) as p:
             for args in args_list:
-                p.apply_async(Net._make_restore_path_matrix, args, callback=self.__callback_make_restore_path_matrix,
-                              error_callback=self._error_1)
+                p.apply_async(Net._make_restore_path_matrix, args, callback=self.__callback_make_restore_path_matrix)
             p.close()
             p.join()
         self.__network_logger.destroy_progress_bar()
@@ -202,18 +201,6 @@ class Net:
         self.__paths_for_way_back_routes[(to_node, from_node)] = path
         self.__network_logger.step_progress_bar()
 
-    @staticmethod
-    def _error_1(e):
-        print(f"ERROR 1 {e}")
-
-    @staticmethod
-    def _error_2(e):
-        print(f"ERROR 2 {e}")
-
-    @staticmethod
-    def _error_3(e):
-        print(f"ERROR 3 {e}")
-
     def parallel_find_way_back(self) -> None:
         args_list = []
         for i, to_node in enumerate(self.__poisson_generators_to_nodes):
@@ -223,8 +210,7 @@ class Net:
         self.__network_logger.init_progress_bar(Message.find_way_back_paths, len(self.__poisson_generators_to_nodes))
         with Pool(cpu_count() * self.__CPU_SCALE) as p:
             for args in args_list:
-                p.apply_async(Net._find_way_back, args=args, callback=self.__callback_for_find_way_back,
-                              error_callback=Net._error_2)
+                p.apply_async(Net._find_way_back, args=args, callback=self.__callback_for_find_way_back)
             p.close()
             p.join()
         self.__network_logger.destroy_progress_bar()
@@ -250,7 +236,7 @@ class Net:
     @staticmethod
     def _find_intersection(from_node: str,
                            to_node: str,
-                           graph: dict[str, dict[str, str]]):
+                           graph: dict[str, dict[str, str]]) -> str:
         current_node = to_node
         prev_node = from_node
         while len(graph[current_node]) < 3:
@@ -342,7 +328,7 @@ class Net:
             path.append(edge)
         return path[::-1]
 
-    def __get_distance_matrix(self, tls_ids) -> np.ndarray:
+    def __get_distance_matrix(self, tls_ids: list[int]) -> np.ndarray:
         n = len(tls_ids)
         distances = np.zeros(shape=(n, n), dtype=np.int32)
         for i, tls_i in enumerate(tls_ids):
@@ -352,14 +338,14 @@ class Net:
         return distances
 
     @staticmethod
-    def __any_overkill_groups(groups_dict):
+    def __any_overkill_groups(groups_dict) -> int:
         for label, group in groups_dict.items():
             if len(group) > 4:
                 return label
         return -1
 
     @staticmethod
-    def __find_max_dist_i(group, distances, medoids, label):
+    def __find_max_dist_i(group: list[int], distances: np.ndarray, medoids: list[int], label: int):
         max_dist = float('-inf')
         max_dist_i = 0
         for i in group:
@@ -369,7 +355,7 @@ class Net:
         return max_dist_i
 
     @staticmethod
-    def __find_best_shortage_group(groups_dict, max_dist_i, distances, medoids):
+    def __find_best_shortage_group(groups_dict: dict, max_dist_i: int, distances: np.ndarray, medoids: list[int]):
         best_label = list(groups_dict.keys())[-1]
         min_dist = float('inf')
         for label, group in list(reversed(groups_dict.items())):
@@ -380,7 +366,7 @@ class Net:
                 best_label = label
         return best_label
 
-    def __recursive_clustering(self, tls_ids):
+    def __recursive_clustering(self, tls_ids: list[str]) -> list[list[str]]:
         distances = self.__get_distance_matrix(tls_ids)
         n = len(tls_ids)
         groups_dict = {}
@@ -426,7 +412,7 @@ class Net:
                     groups_list.append(group_tls_ids)
         return groups_list
 
-    def make_traffic_lights_groups(self):
+    def make_traffic_lights_groups(self) -> None:
         groups = self.__recursive_clustering(self.__turned_on_traffic_lights_ids)
         filtered_groups = []
         for group in groups:
@@ -479,18 +465,18 @@ class Net:
     def get_sumolib_net(self):
         return self.__sumolib_net
 
-    def get_turned_on_traffic_lights_ids(self):
+    def get_turned_on_traffic_lights_ids(self) -> list[str]:
         return self.__turned_on_traffic_lights_ids
 
-    def get_traffic_lights_groups(self):
+    def get_traffic_lights_groups(self) -> list[list[str]]:
         return self.__traffic_lights_groups
 
-    def get_remain_tls(self):
+    def get_remain_tls(self) -> list[str]:
         return self.__remain_tls
 
     def get_shortest_path(self, start_node: str, prev_node: Optional[str], end_node: str) -> list[str]:
         return self.__paths[(start_node, prev_node)][end_node]
 
-    def get_number_of_lanes(self):
+    def get_number_of_lanes(self) -> str:
         edge = self.__edges[0]
         return traci.edge.getLaneNumber(edge)

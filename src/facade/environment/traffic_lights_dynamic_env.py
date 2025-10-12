@@ -69,14 +69,14 @@ class TrafficLightsDynamicEnv(gym.Env):
         }
 
     @staticmethod
-    def _average_vehicle_size():
+    def _average_vehicle_size() -> float:
         sum_length = 0
         vehicles = traci.vehicle.getIDList()
         for vehicle in vehicles:
             sum_length += traci.vehicle.getLength(vehicle)
         return sum_length / len(vehicles)
 
-    def __make_observation_space(self):
+    def __make_observation_space(self) -> Dict:
         observation_space = Dict({
             "density": Box(low=0, high=100, shape=(self.__group_size, self.__n_lanes), dtype=np.float32),
             "waiting": Box(low=0, high=1, shape=(self.__group_size, self.__n_lanes), dtype=np.float32),
@@ -107,7 +107,7 @@ class TrafficLightsDynamicEnv(gym.Env):
             return np.float32(0), np.float32(0)
 
     @staticmethod
-    def __get_speed_stats_on_lane(lane_id: str):
+    def __get_speed_stats_on_lane(lane_id: str) -> tuple[float, float]:
         vehicles_ids = traci.lane.getLastStepVehicleIDs(lane_id)
         speeds = np.zeros((len(vehicles_ids, )), dtype=np.float32)
         for i, vehicle_id in enumerate(vehicles_ids):
@@ -117,7 +117,7 @@ class TrafficLightsDynamicEnv(gym.Env):
         else:
             return np.float32(0), np.float32(0)
 
-    def __get_observation(self, i_window):
+    def __get_observation(self, i_window: int) -> dict:
         tls_group = self.__traffic_lights_groups[i_window]
         density = np.zeros(shape=(self.__group_size, self.__n_lanes), dtype=np.float32)
         waiting = np.zeros(shape=(self.__group_size, self.__n_lanes), dtype=np.float32)
@@ -160,7 +160,7 @@ class TrafficLightsDynamicEnv(gym.Env):
         }
         return observation
 
-    def __assign_cycle_time_for_remain_tls(self):
+    def __assign_cycle_time_for_remain_tls(self) -> None:
         sum_yellow_duration = {tls_id: 0 for tls_id in self.__remain_tls}
         n_yellow_states = {tls_id: 0 for tls_id in self.__remain_tls}
         for tls_id in self.__remain_tls:
@@ -352,7 +352,7 @@ class TrafficLightsDynamicEnv(gym.Env):
         reward = info["rewards"]["sum_reward"]
         return observation, reward, terminated, truncated, info
 
-    def __collect_statistics(self):
+    def __collect_statistics(self) -> None:
         halting_number = 0
         waiting_time = 0
         speed = 0
@@ -371,7 +371,7 @@ class TrafficLightsDynamicEnv(gym.Env):
     def get_statistics(self) -> dict[str, list[float]]:
         return self.__statistics
 
-    def close(self):
+    def close(self) -> None:
         traci.close()
 
     def get_schedule(self):

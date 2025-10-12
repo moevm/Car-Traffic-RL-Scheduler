@@ -61,7 +61,7 @@ class TrafficScheduler:
         net_name = f"{self.__SUMO_CONFIG[slash_position + 1:extension_position]}.net.xml"
         return self.__SUMO_CONFIG[:slash_position + 1] + net_name
 
-    def __extract_checkpoint_path(self):
+    def __extract_checkpoint_path(self) -> str:
         slash_position = self.__SUMO_CONFIG.rfind('/')
         extension_position = self.__SUMO_CONFIG.rfind('.sumocfg')
         net_name = f"{self.__SUMO_CONFIG[slash_position + 1:extension_position]}_checkpoint.xml"
@@ -152,7 +152,7 @@ class TrafficScheduler:
         os.makedirs('statistics', exist_ok=True)
         df.to_csv(f'statistics/{name}')
 
-    def __setup_start_simulation_state(self):
+    def __setup_start_simulation_state(self) -> None:
         sumo_cmd = ["sumo", "-c", self.__SUMO_CONFIG]
         traci.start(sumo_cmd)
         self.__net.turn_off_traffic_lights(self.__simulation_params.turned_off_traffic_lights)
@@ -176,7 +176,7 @@ class TrafficScheduler:
             return initial_value * np.exp(-7 * (1 - progress_remaining))
         return func
 
-    def learn(self):
+    def learn(self) -> None:
         self.__setup_start_simulation_state()
         if not self.__new_checkpoint:
             n_steps = 15 * len(self.__traffic_lights_groups)
@@ -264,7 +264,7 @@ class TrafficScheduler:
             model_env.close()
             self.__save_statistics(agent_statistics)
 
-    def __reset_tls_after_loading(self):
+    def __reset_tls_after_loading(self) -> None:
         traci.simulationStep()
         for tls_id in self.__turned_on_traffic_lights:
             current_logic = traci.trafficlight.getAllProgramLogics(tls_id)[0]
