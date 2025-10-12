@@ -217,13 +217,9 @@ class TrafficLightsDynamicEnv(gym.Env):
         tls_group = self.__traffic_lights_groups[i_window]
         sum_waiting_reward = 0.0
         for i, tls_id in enumerate(tls_group):
-            current_logic = traci.trafficlight.getAllProgramLogics(tls_id)[0]
-            current_phase = traci.trafficlight.getPhase(tls_id)
-            state = current_logic.phases[current_phase].state
             lanes = set(traci.trafficlight.getControlledLanes(tls_id))
-            if ('y' not in state) or (('y' in state) and switched_tls[i]):
-                for j, lane in enumerate(lanes):
-                    sum_waiting_reward += traci.lane.getWaitingTime(lane)
+            for j, lane in enumerate(lanes):
+                sum_waiting_reward += traci.lane.getWaitingTime(lane)
         return -sum_waiting_reward
 
     def __calculate_halting_reward(self, switched_tls: list[bool], i_window: int) -> float:
@@ -295,14 +291,14 @@ class TrafficLightsDynamicEnv(gym.Env):
             current_logic = traci.trafficlight.getAllProgramLogics(tls_id)[0]
             current_phase = traci.trafficlight.getPhase(tls_id)
             state = current_logic.phases[current_phase].state
+            vehicles_on_lanes_before = vehicles_on_tls_before[i]
+            vehicles_on_lanes_after = vehicles_on_tls_after[i]
+            for j, vehicles_before in enumerate(vehicles_on_lanes_before):
+                for vehicle_before in vehicles_before:
+                    if (vehicle_before not in vehicles_on_lanes_after[j]) and (
+                            vehicle_before not in traci.simulation.getArrivedIDList()):
+                        reward += 1
             if ('y' not in state) or (switched_tls[i] and 'y' in state):
-                vehicles_on_lanes_before = vehicles_on_tls_before[i]
-                vehicles_on_lanes_after = vehicles_on_tls_after[i]
-                for j, vehicles_before in enumerate(vehicles_on_lanes_before):
-                    for vehicle_before in vehicles_before:
-                        if (vehicle_before not in vehicles_on_lanes_after[j]) and (
-                                vehicle_before not in traci.simulation.getArrivedIDList()):
-                            reward += 1
                 self.__n_steps_capacity[tls_id] += reward
             elif ('y' in state) and (not switched_tls[i]):
                 self.__n_steps_capacity[tls_id] = 0
