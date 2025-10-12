@@ -259,6 +259,16 @@ class TrafficLightsDynamicEnv(gym.Env):
                 else:
                     if action[i] == 1:
                         print(f"duration {spent} | tls_id {tls_id}")
+                        if spent >= self.__min_duration:
+                            traci.trafficlight.setPhase(tls_id, (current_phase + 1) % n_phases)
+                        else:
+                            traci.trafficlight.setPhase(tls_id, current_phase)
+                        switched_tls[i] = True
+                    elif action[i] == 0:
+                        if spent > self.__max_duration:
+                            traci.trafficlight.setPhase(tls_id, (current_phase + 1) % n_phases)
+                        else:
+                            traci.trafficlight.setPhase(tls_id, current_phase)
         return switched_tls
 
     def __get_vehicles_on_lanes(self, i_window: int) -> list[list[list[str]]]:
