@@ -56,8 +56,7 @@ class TrafficLightsDynamicEnv(gym.Env):
         self.__max_tls_neighbors = 4
         self.__max_phases = 6
         self.__i_window = 0
-        observation_space = self.__make_observation_space()
-        self.observation_space = Dict(observation_space)
+        self.observation_space = Dict(self.__make_observation_space())
         self.action_space = MultiBinary(self.__group_size)
         self.__n_steps_capacity = {tls_id: 0 for tls_id in self.__traffic_lights_ids}
         self.__vehicles_on_lanes_before = {i: [] for i in range(len(self.__traffic_lights_groups))}
@@ -244,9 +243,7 @@ class TrafficLightsDynamicEnv(gym.Env):
     def __change_phase(self, action: ActType, i_window: int) -> list[bool]:
         tls_group = self.__traffic_lights_groups[i_window]
         switched_tls = [False] * len(tls_group)
-        durations = []
         for i, tls_id in enumerate(tls_group):
-            durations.append(traci.trafficlight.getSpentDuration(tls_id))
             current_logic = traci.trafficlight.getAllProgramLogics(tls_id)[0]
             n_phases = len(current_logic.phases)
             current_phase = traci.trafficlight.getPhase(tls_id)
@@ -262,16 +259,6 @@ class TrafficLightsDynamicEnv(gym.Env):
                 else:
                     if action[i] == 1:
                         print(f"duration {spent} | tls_id {tls_id}")
-                        if spent >= self.__min_duration:
-                            traci.trafficlight.setPhase(tls_id, (current_phase + 1) % n_phases)
-                        else:
-                            traci.trafficlight.setPhase(tls_id, current_phase)
-                        switched_tls[i] = True
-                    elif action[i] == 0:
-                        if spent > self.__max_duration:
-                            traci.trafficlight.setPhase(tls_id, (current_phase + 1) % n_phases)
-                        else:
-                            traci.trafficlight.setPhase(tls_id, current_phase)
         return switched_tls
 
     def __get_vehicles_on_lanes(self, i_window: int) -> list[list[list[str]]]:
