@@ -35,7 +35,7 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-ENV VIRTUAL_ENV sumovenv
+ENV VIRTUAL_ENV=sumovenv
 
 COPY ./src/requirements.txt /app/requirements.txt
 
