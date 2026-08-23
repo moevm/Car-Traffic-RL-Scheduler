@@ -32,7 +32,7 @@ class Net:
             tls_id for tls_id in self.__tls_ids
             if not self.__sumolib_net.hasNode(tls_id)
         ]
-        # проверка совпадения id светофора и узла
+        # если не совпал
         if invalid_tls_ids:
             raise ValueError(
                 "The node ID and traffic light ID did not match."
