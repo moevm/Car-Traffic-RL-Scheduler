@@ -23,7 +23,21 @@ class Net:
         self.__NET_CONFIG = net_config
         self.__sumolib_net = readNet(net_config)
         # потенциальная ошибка: id светофора и узла могут не совпадать
-        self.__tls_ids = [tls.getID() for tls in self.__sumolib_net.getTrafficLights()]
+        self.__tls_ids = [
+            tls.getID()
+            for tls in self.__sumolib_net.getTrafficLights()
+        ]
+        # проверка совпадения id светофора и узла
+        invalid_tls_ids = [
+            tls_id for tls_id in self.__tls_ids
+            if not self.__sumolib_net.hasNode(tls_id)
+        ]
+        # проверка совпадения id светофора и узла
+        if invalid_tls_ids:
+            raise ValueError(
+                "The node ID and traffic light ID did not match."
+                f"Invalid IDs: {invalid_tls_ids}"
+            )
         self.__network_logger = NetworkLogger()
         self.__INF = float("inf")
         self.__nodes = [node.getID() for node in self.__sumolib_net.getNodes()]
