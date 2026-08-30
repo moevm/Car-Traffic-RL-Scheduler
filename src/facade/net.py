@@ -22,8 +22,11 @@ class Net:
         self.__CPU_SCALE = cpu_scale
         self.__NET_CONFIG = net_config
         self.__sumolib_net = readNet(net_config)
-        # потенциальная ошибка: id светофора и узла могут не совпадать
-        self.__tls_ids = [tls.getID() for tls in self.__sumolib_net.getTrafficLights()]
+        self.__tls_ids = [
+            tls.getID()
+            for tls in self.__sumolib_net.getTrafficLights()
+        ]
+        self.__validate_traffic_lights()
         self.__network_logger = NetworkLogger()
         self.__INF = float("inf")
         self.__nodes = [node.getID() for node in self.__sumolib_net.getNodes()]
@@ -44,6 +47,40 @@ class Net:
             self.__poisson_generators_to_nodes.append(self.__sumolib_net.getEdge(edge).getToNode().getID())
             self.__poisson_generators_from_nodes.append(self.__sumolib_net.getEdge(edge).getFromNode().getID())
         self.__poisson_generators_edges = poisson_generators_edges
+
+    def __validate_traffic_lights(self) -> None:
+        """
+        Validate the assumption used by this project:
+
+            traffic_light_id == controlled_junction_id
+
+        Every traffic light must control exactly one junction, and that
+        junction ID must be equal to the traffic light ID.
+
+        Joined traffic lights, which control multiple junctions, are
+        intentionally rejected because the rest of Net treats TLS IDs
+        as node IDs.
+        """
+        invalid_tls = []
+        for tls in self.__sumolib_net.getTrafficLights():
+            tls_id = tls.getID()
+            controlled_junctions = {
+                connection[0].getEdge().getToNode().getID()
+                for connection in tls.getConnections()
+            }
+            if controlled_junctions != {tls_id}:
+                invalid_tls.append(
+                    {
+                        "tls_id": tls_id,
+                        "controlled_junctions": sorted(controlled_junctions),
+                    }
+                )
+        if invalid_tls:
+            raise ValueError(
+                "The project requires every traffic light to control exactly "
+                "one junction whose ID is equal to the traffic light ID. "
+                f"Invalid traffic lights: {invalid_tls}"
+            )
 
     def __callback_find_routes(self, response: dict[tuple[str, Optional[str]], dict[str, list[str]]]):
         self.__paths.update(response)
