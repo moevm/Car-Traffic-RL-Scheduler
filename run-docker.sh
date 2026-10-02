@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 docker build . -t docker-sumo
 mkdir -p src/metrics_logs/ src/pretrained_info/ src/statistics/
 docker run -it --rm \
