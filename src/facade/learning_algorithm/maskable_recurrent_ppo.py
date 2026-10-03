@@ -3,6 +3,7 @@ from collections import deque
 from copy import deepcopy
 from typing import Union, Optional
 
+from stable_baselines3.common.torch_layers import CombinedExtractor
 from sb3_contrib.common.recurrent.policies import RecurrentActorCriticPolicy
 from sb3_contrib.common.recurrent.type_aliases import RNNStates
 from stable_baselines3.common import utils
@@ -16,8 +17,14 @@ from stable_baselines3.common.vec_env import VecEnv
 import torch as th
 import numpy as np
 from gymnasium import spaces
+from gymnasium.spaces.utils import flatdim
 
 from facade.learning_algorithm.buffer import MaskableRecurrentDictRolloutBuffer
+
+class IntCombinedExtractor(CombinedExtractor):
+    def __init__(self, observation_space: spaces.Dict):
+        super().__init__(observation_space)
+        self._features_dim = int(self._features_dim)
 
 
 class MaskableRecurrentPPO(RecurrentPPO):
@@ -27,8 +34,12 @@ class MaskableRecurrentPPO(RecurrentPPO):
         self._setup_lr_schedule()
         self.set_random_seed(self.seed)
 
-        buffer_cls = MaskableRecurrentDictRolloutBuffer if isinstance(self.observation_space,
-                                                                      spaces.Dict) else RecurrentRolloutBuffer
+        buffer_cls = MaskableRecurrentDictRolloutBuffer if isinstance(
+            self.observation_space,
+            spaces.Dict
+        ) else RecurrentRolloutBuffer
+
+        self.policy_kwargs["features_extractor_class"] = IntCombinedExtractor
 
         self.policy = self.policy_class(
             self.observation_space,
