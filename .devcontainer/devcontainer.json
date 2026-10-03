@@ -1,0 +1,47 @@
+{
+	"name": "Car Traffic RL Scheduler",
+
+	"build": {
+		"context": "..",
+		"dockerfile": "../Dockerfile"
+	},
+
+	"features": {
+		"ghcr.io/devcontainers/features/git:1": {},
+		"ghcr.io/devcontainers/features/common-utils:2": {
+			"installZsh": true
+		}
+	},
+
+	"remoteUser": "root",
+
+	"remoteEnv": {
+		"SSH_AUTH_SOCK": "${localEnv:SSH_AUTH_SOCK}"
+	},
+
+	"mounts": [
+		"source=${localEnv:HOME}/.gitconfig,target=/root/.gitconfig,type=bind,readonly"
+	],
+
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"ms-python.python",
+				"ms-python.vscode-pylance",
+				"ms-python.debugpy"
+			],
+
+			"settings": {
+				"python.defaultInterpreterPath": "/app/sumovenv/bin/python",
+
+				"terminal.integrated.defaultProfile.linux": "zsh",
+
+				"terminal.integrated.profiles.linux": {
+					"zsh": {
+						"path": "/usr/bin/zsh"
+					}
+				}
+			}
+		}
+	}
+}
