@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.6.0-cudnn-runtime-ubuntu24.04
+FROM nvidia/cuda:13.4.2-cudnn-runtime-ubuntu24.04
 
 LABEL Description="Containerized traffic RL-scheduler in SUMO"
 
@@ -19,7 +19,7 @@ RUN apt-get update && \
     default-jdk \
     maven \
     libeigen3-dev && \
-    wget http://downloads.sourceforge.net/project/sumo/sumo/version%20$SUMO_VERSION/sumo-src-$SUMO_VERSION.tar.gz && \
+    wget https://sumo.dlr.de/releases/$SUMO_VERSION/sumo-src-$SUMO_VERSION.tar.gz && \
     tar xzf sumo-src-$SUMO_VERSION.tar.gz && \
     mv sumo-$SUMO_VERSION $SUMO_MAKE_FOLDER && \
     rm sumo-src-$SUMO_VERSION.tar.gz && \
@@ -41,9 +41,15 @@ COPY ./src/requirements.txt /app/requirements.txt
 
 RUN python3 -m venv $VIRTUAL_ENV && \
     . $VIRTUAL_ENV/bin/activate && \
-    pip install -r requirements.txt --no-cache-dir && \
-    apt-get clean
+    pip install --timeout 3600 --retries 10 \
+        torch==2.5.1 \
+        --index-url https://download.pytorch.org/whl/cu121 \
+        --no-cache-dir
 
+RUN . $VIRTUAL_ENV/bin/activate && \
+    pip install --timeout 3600 --retries 10 \
+        -r requirements.txt \
+        --no-cache-dir
 COPY ./src /app
 COPY *.sh /app
 RUN groupadd -r -g 1001 user && \
