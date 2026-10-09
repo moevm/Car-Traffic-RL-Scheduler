@@ -18,3 +18,5 @@ docker run -it --rm \
   --gpus all \
   -d \
   docker-sumo "$@"
+
+set +e

@@ -15,3 +15,5 @@ cp vec_normalized.pkl pretrained_info/vec_normalized.pkl
 echo "Training finished."
 echo "Model: pretrained_info/trained_model.zip"
 echo "VecNormalize: pretrained_info/vec_normalized.pkl"
+
+set +e
