@@ -27,7 +27,9 @@ for n in "${maps[@]}"; do
     python3 main.py \
       -s "configs/${trained_type}/rand_${n}.sumocfg" \
       -p "configs/simulation_parameters/rand_${n}.json" \
-      -m evaluation_trained_agent
+      -m evaluation_trained_agent \
+      -n pretrained_info/vec_normalized.pkl \
+      -w pretrained_info/trained_model
   done
 done
 
