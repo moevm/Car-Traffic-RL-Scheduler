@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.6.0-cudnn-runtime-ubuntu24.04
+FROM nvidia/cuda:13.4.2-cudnn-runtime-ubuntu24.04
 
 LABEL Description="Containerized traffic RL-scheduler in SUMO"
 
