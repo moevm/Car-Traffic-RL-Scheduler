@@ -5,6 +5,7 @@ mkdir -p src/metrics_logs/ src/pretrained_info/ src/statistics/
 docker run -it --rm \
   --env DISPLAY=$DISPLAY \
   --env XAUTHORITY=$XAUTHORITY \
+  --env-file .env \
   --volume $XAUTHORITY:$XAUTHORITY \
   --volume /tmp/.X11-unix:/tmp/.X11-unix:rw \
   --volume="./src/configs:/app/configs" \
