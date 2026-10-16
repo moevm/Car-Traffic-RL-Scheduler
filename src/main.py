@@ -1,5 +1,5 @@
 import click
-
+from clearml import Task
 from facade.facade import TrafficScheduler
 
 
@@ -24,6 +24,10 @@ def main(sumo_config: str, simulation_parameters: str, mode: str, vec_normalized
     This program is designed for training an agent using the Recurrent PPO algorithm and evaluating the trained agent.
     The program also allows evaluating the metrics of standard SUMO agents.
     """
+    task = Task.init(
+        project_name="Car-Traffic-RL-Scheduler",
+        task_name=mode
+    )
     scheduler = TrafficScheduler(sumo_config, simulation_parameters, new_checkpoint, enable_gui, cycle_time)
     match mode:
         case 'train':
