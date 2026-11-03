@@ -12,7 +12,7 @@
 
 ## Формирование светофорных групп
 
-Формирование светофорных групп реализовано с помощью комбинации иерархической кластеризации и алгоритма k-medoidsл. Светофорам, которые не вошли в светофорные группы, назначается статическое управление
+Формирование светофорных групп реализовано с помощью комбинации иерархической кластеризации и алгоритма k-medoids. Светофорам, которые не вошли в светофорные группы, назначается статическое управление
 
 ## Среда для обучения
 
@@ -37,58 +37,68 @@
 * Количество пропущенных автомобилей за последний шаг
 
 Награда за светофорную группу рассчитывается суммированием награды для каждого светофорного объекта.
- 
+
 ## Запуск через Docker
 
 1. Склонируйте репозиторий с помощью следующей команды:
-```bash
-https://github.com/moevm/Car-Traffic-RL-Scheduler.git
-```
+    ```bash
+    https://github.com/moevm/Car-Traffic-RL-Scheduler.git
+    ```
 
 2. Перейдите в директорию с приложением:
-```bash
-cd Car-Traffic-RL-Scheduler
-```
+    ```bash
+    cd Car-Traffic-RL-Scheduler
+    ```
 
-3. Запустите скрипт run-docker.sh, который сделает образ приложения, а затем запустит контейнер на основе данного образа в режиме обучения:
-```bash
-sh run-docker.sh train.sh
-```
+3. [Опционально] Чтобы отслеживать процесс обучения, нужно:
+    - загеристрироваться на [clear.ml](https://clear.ml/);
+    - перейти в [settings/workspace](https://app.clear.ml/settings/workspace-configuration), создать ключи нажав "Create new credentionals" и скопировать их;
+    - Скопировать .env.example в локальный неотслеживаемый .env
+    ```bash
+        cp .env.example .env
+    ```
+    - Поместить ключи в локальный .env файл
 
-4. Если Вам необходимо запустить систему в режиме оценки обученного агента, то запустите контейнер следующих образом:
-```bash
-sh run-docker.sh evaluate.sh
-```
+
+4. Запустите скрипт run-docker.sh, который сделает образ приложения, а затем запустит контейнер на основе данного образа в режиме обучения:
+    ```bash
+    sh run-docker.sh train.sh
+    ```
+
+5. Если Вам необходимо запустить систему в режиме оценки обученного агента, то запустите контейнер следующих образом:
+    ```bash
+    sh run-docker.sh evaluate.sh
+    ```
 
 ## Запуск без Docker
 
 1. Склонируйте репозиторий следующим образом:
-```bash
-git clone https://github.com/moevm/Car-Traffic-RL-Scheduler.git
-```
+    ```bash
+    git clone https://github.com/moevm/Car-Traffic-RL-Scheduler.git
+    ```
 
 2. Перейдите в директорию с кодом проекта:
-```bash
-cd Car-Traffic-RL-Scheduler/src
-```
+    ```bash
+    cd Car-Traffic-RL-Scheduler/src
+    ```
 
 3. Создайте переменную окружения и активируйте её:
-```bash
-python3 -m venv .venv && source .venv/bin/activate
-```
+    ```bash
+    python3 -m venv .venv && source .venv/bin/activate
+    ```
 
 4. Установите необходимые зависимости:
-```bash
-pip -r requirements.txt
-```
+    ```bash
+    pip -r requirements.txt
+    ```
 4. Сгенерируйте карту с помощью netgenerate из пакета SUMO так, чтобы каждый светофорный объект имел не более 6 фаз, каждый узел имел от 1 до 4 соседей включительно и каждое ребро имело 2 полосы в одном направлении. Сгенированная карта должна храниться в директории configs.
 
 5. Сгенерируйте конфигурационный файл в папку configs/simulation_parameters помощью simulation_parameters_generator.py. Справку можно просмотреть с помощью следующей команды:
-```bash
-python3 simulation_parameters_generator.py --help
-```
+    ```bash
+    python3 simulation_parameters_generator.py --help
+    ```
 
 6. Запустите обучение или оценку агента с помощью main.py. Справку можно просмотреть с помощью следующей команды:
-```bash
-python3 main.py --help
-```
+    ```bash
+    python3 main.py --help
+    ```
