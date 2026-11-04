@@ -50,6 +50,7 @@ class TrafficLightsDynamicEnv(gym.Env):
         traci.start(sumo_cmd)
         traci.simulation.loadState(self.__checkpoint_file)
         self.__vehicle_size = self._average_vehicle_size()
+        self.__cache_static_sumo_data()
         self.__group_size = len(self.__traffic_lights_groups[0])
         self.__min_duration = 15
         self.__max_duration = 60
@@ -85,37 +86,58 @@ class TrafficLightsDynamicEnv(gym.Env):
             "bounds": MultiDiscrete([3] * self.__group_size),
             "accumulated_capacity": Box(low=0, high=10 * self.__max_duration, shape=(self.__group_size,),
                                         dtype=np.float32),
-            "mean_distance": Box(low=0, high=300, shape=(self.__group_size, self.__n_lanes), dtype=np.float32),
-            "std_distance": Box(low=0, high=300, shape=(self.__group_size, self.__n_lanes), dtype=np.float32),
+            "mean_distance": Box(low=0, high=1, shape=(self.__group_size, self.__n_lanes), dtype=np.float32),
+            "std_distance": Box(low=0, high=1, shape=(self.__group_size, self.__n_lanes), dtype=np.float32),
             "mean_speed": Box(low=0, high=200, shape=(self.__group_size, self.__n_lanes), dtype=np.float32),
             "std_speed": Box(low=0, high=200, shape=(self.__group_size, self.__n_lanes), dtype=np.float32)
         })
         return observation_space
 
-    @staticmethod
-    def __get_distance_stats_on_lane(tls_id: str, lane_id: str) -> tuple[np.float32, np.float32]:
-        vehicles_ids = traci.lane.getLastStepVehicleIDs(lane_id)
-        distances = np.zeros((len(vehicles_ids, )), dtype=np.float32)
-        for i, vehicle_id in enumerate(vehicles_ids):
-            x_tls, y_tls = traci.junction.getPosition(junctionID=tls_id)
-            x_vehicle, y_vehicle = traci.vehicle.getPosition(vehicle_id)
-            distance = np.sqrt((x_tls - x_vehicle) ** 2 + (y_tls - y_vehicle) ** 2)
-            distances[i] = distance / traci.lane.getLength(lane_id)
-        if len(vehicles_ids) > 0:
-            return distances.mean(), distances.std()
-        else:
-            return np.float32(0), np.float32(0)
+    def __cache_static_sumo_data(self) -> None:
+        self.__controlled_lanes = {}
+        self.__observation_lanes = {}
+        self.__lane_lengths = {}
+        for tls_id in self.__traffic_lights_ids:
+            controlled_lanes = list(
+                traci.trafficlight.getControlledLanes(tls_id)
+            )
+            self.__controlled_lanes[tls_id] = controlled_lanes[:self.__n_lanes]
+            self.__observation_lanes[tls_id] = list(
+                dict.fromkeys(controlled_lanes)
+            )[:self.__n_lanes]
+            lanes_to_cache = set(self.__controlled_lanes[tls_id])
+            lanes_to_cache.update(self.__observation_lanes[tls_id])
+            for lane_id in lanes_to_cache:
+                if lane_id not in self.__lane_lengths:
+                    self.__lane_lengths[lane_id] = traci.lane.getLength(lane_id)
 
-    @staticmethod
-    def __get_speed_stats_on_lane(lane_id: str) -> tuple[float, float]:
-        vehicles_ids = traci.lane.getLastStepVehicleIDs(lane_id)
-        speeds = np.zeros((len(vehicles_ids, )), dtype=np.float32)
-        for i, vehicle_id in enumerate(vehicles_ids):
-            speeds[i] = traci.vehicle.getSpeed(vehicle_id)
-        if len(vehicles_ids) > 0:
-            return speeds.mean(), speeds.std()
-        else:
-            return np.float32(0), np.float32(0)
+    def __get_lane_motion_stats(
+            self,
+            lane_id: str,
+            vehicles_ids: tuple[str, ...] | list[str],
+    ) -> tuple[np.float32, np.float32, np.float32, np.float32]:
+        if not vehicles_ids:
+            return (
+                np.float32(0),
+                np.float32(0),
+                np.float32(0),
+                np.float32(0),
+            )
+        lane_length = max(self.__lane_lengths[lane_id], 1.0)
+        distances = np.fromiter(
+            (
+                (lane_length - traci.vehicle.getLanePosition(vehicle_id)) / lane_length
+                for vehicle_id in vehicles_ids
+            ),
+            dtype=np.float32,
+            count=len(vehicles_ids),
+        )
+        speeds = np.fromiter(
+            (traci.vehicle.getSpeed(vehicle_id) for vehicle_id in vehicles_ids),
+            dtype=np.float32,
+            count=len(vehicles_ids),
+        )
+        return distances.mean(), distances.std(), speeds.mean(), speeds.std()
 
     def __get_observation(self, i_window: int) -> dict:
         tls_group = self.__traffic_lights_groups[i_window]
@@ -130,22 +152,32 @@ class TrafficLightsDynamicEnv(gym.Env):
         mean_speed = np.zeros(shape=(self.__group_size, self.__n_lanes), dtype=np.float32)
         std_speed = np.zeros(shape=(self.__group_size, self.__n_lanes), dtype=np.float32)
         for i, tls_id in enumerate(tls_group):
-            lanes = list(dict.fromkeys(traci.trafficlight.getControlledLanes(tls_id)))
+            lanes = self.__observation_lanes[tls_id]
             for j, lane_id in enumerate(lanes):
+                lane_length = self.__lane_lengths[lane_id]
                 waiting[i, j] = traci.lane.getLastStepHaltingNumber(lane_id) / (
-                        traci.lane.getLength(lane_id) / self.__vehicle_size)
+                        lane_length / self.__vehicle_size)
                 density[i, j] = traci.lane.getLastStepOccupancy(lane_id)
-                mean_distance[i, j], std_distance[i, j] = self.__get_distance_stats_on_lane(tls_id, lane_id)
-                mean_speed[i, j], std_speed[i, j] = self.__get_speed_stats_on_lane(lane_id)
+
+                vehicles_ids = traci.lane.getLastStepVehicleIDs(lane_id)
+                (
+                    mean_distance[i, j],
+                    std_distance[i, j],
+                    mean_speed[i, j],
+                    std_speed[i, j],
+                ) = self.__get_lane_motion_stats(lane_id, vehicles_ids)
             phase[i] = traci.trafficlight.getPhase(tls_id)
-            time[i] = min(traci.trafficlight.getSpentDuration(tls_id), self.__max_duration)
+            spent = traci.trafficlight.getSpentDuration(tls_id)
+            time[i] = min(spent, self.__max_duration)
             accumulated_capacity[i] = self.__n_steps_capacity[tls_id]
-            if traci.trafficlight.getSpentDuration(tls_id) < self.__min_duration:
+
+            if spent < self.__min_duration:
                 bounds[i] = 0
-            elif self.__min_duration <= traci.trafficlight.getSpentDuration(tls_id) <= self.__max_duration:
+            elif spent <= self.__max_duration:
                 bounds[i] = 1
-            elif traci.trafficlight.getSpentDuration(tls_id) > self.__max_duration:
+            else:
                 bounds[i] = 2
+
         observation = {
             "density": density,
             "waiting": waiting,
@@ -217,8 +249,8 @@ class TrafficLightsDynamicEnv(gym.Env):
         tls_group = self.__traffic_lights_groups[i_window]
         sum_waiting_reward = 0.0
         for i, tls_id in enumerate(tls_group):
-            lanes = set(traci.trafficlight.getControlledLanes(tls_id))
-            for j, lane in enumerate(lanes):
+            lanes = self.__controlled_lanes[tls_id]
+            for lane in lanes:
                 sum_waiting_reward += traci.lane.getWaitingTime(lane)
         return -sum_waiting_reward
 
@@ -229,11 +261,11 @@ class TrafficLightsDynamicEnv(gym.Env):
             current_logic = traci.trafficlight.getAllProgramLogics(tls_id)[0]
             current_phase = traci.trafficlight.getPhase(tls_id)
             state = current_logic.phases[current_phase].state
-            lanes = set(traci.trafficlight.getControlledLanes(tls_id))
+            lanes = self.__controlled_lanes[tls_id]
             if ('y' not in state) or (('y' in state) and switched_tls[i]):
-                for j, lane in enumerate(lanes):
+                for lane in lanes:
                     sum_halting_number += traci.lane.getLastStepHaltingNumber(lane) / (
-                            traci.lane.getLength(lane) / self.__vehicle_size)
+                            self.__lane_lengths[lane] / self.__vehicle_size)
         return -sum_halting_number
 
     def __change_phase(self, action: ActType, i_window: int) -> list[bool]:
@@ -271,10 +303,8 @@ class TrafficLightsDynamicEnv(gym.Env):
         tls_group = self.__traffic_lights_groups[i_window]
         vehicles_on_lanes = []
         for tls_id in tls_group:
-            lanes = set(traci.trafficlight.getControlledLanes(tls_id))
-            tls_lanes = []
-            for lane in lanes:
-                tls_lanes.append(traci.lane.getLastStepVehicleIDs(lane))
+            lanes = self.__controlled_lanes[tls_id]
+            tls_lanes = [traci.lane.getLastStepVehicleIDs(lane) for lane in lanes]
             vehicles_on_lanes.append(tls_lanes)
         return vehicles_on_lanes
 
@@ -285,6 +315,7 @@ class TrafficLightsDynamicEnv(gym.Env):
         vehicles_on_tls_before = self.__vehicles_on_lanes_before[i_window]
         tls_group = self.__traffic_lights_groups[i_window]
         sum_step_capacity = 0.0
+        arrived_vehicles_set = set(traci.simulation.getArrivedIDList())
         for i in range(len(vehicles_on_tls_before)):
             reward = 0
             tls_id = tls_group[i]
@@ -294,10 +325,11 @@ class TrafficLightsDynamicEnv(gym.Env):
             vehicles_on_lanes_before = vehicles_on_tls_before[i]
             vehicles_on_lanes_after = vehicles_on_tls_after[i]
             for j, vehicles_before in enumerate(vehicles_on_lanes_before):
-                for vehicle_before in vehicles_before:
-                    if (vehicle_before not in vehicles_on_lanes_after[j]) and (
-                            vehicle_before not in traci.simulation.getArrivedIDList()):
-                        reward += 1
+                vehicles_before_set = set(vehicles_before)
+                vehicles_after_set = set(vehicles_on_lanes_after[j])
+                reward += len(
+                    vehicles_before_set - vehicles_after_set - arrived_vehicles_set
+                )
             if ('y' not in state) or (switched_tls[i] and 'y' in state):
                 self.__n_steps_capacity[tls_id] += reward
             elif ('y' in state) and (not switched_tls[i]):
@@ -327,9 +359,10 @@ class TrafficLightsDynamicEnv(gym.Env):
         action_mask = np.array([0] * self.__group_size, dtype=np.uint8)
         tls_group = self.__traffic_lights_groups[i_window]
         for i, tls_id in enumerate(tls_group):
-            if self.__min_duration <= traci.trafficlight.getSpentDuration(tls_id) <= self.__max_duration:
+            spent = traci.trafficlight.getSpentDuration(tls_id)
+            if self.__min_duration <= spent <= self.__max_duration:
                 action_mask[i] = 1
-            elif traci.trafficlight.getSpentDuration(tls_id) > self.__max_duration:
+            elif spent > self.__max_duration:
                 action_mask[i] = 2
         return action_mask
 

@@ -4,6 +4,8 @@ LABEL Description="Containerized traffic RL-scheduler in SUMO"
 
 ENV SUMO_VERSION=1.22.0 SUMO_MAKE_FOLDER=/opt/sumo
 
+ENV LIBSUMO_AS_TRACI=1
+
 RUN apt-get update && \
     apt-get install -y cmake \
     python3 \
